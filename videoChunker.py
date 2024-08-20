@@ -1,15 +1,24 @@
 import os
 import sys
 import pandas as pd
-import docx
+#import docx
 import csv
-#from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
-#from moviepy.editor import VideoFileClip
+import subprocess
+from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
+from moviepy.editor import VideoFileClip
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 from tkinter import END
+import ffmpeg
+import threading
 
+
+# Path to the ffmpeg executable
+ffmpeg_path = 'C:/Users/Zack_Mason/Desktop/coding/codingProjects/videoChunker/ffmpeg-2024-08-15-git-1f801dfdb5-essentials_build/bin/ffmpeg.exe'
+
+# Update the path to ffmpeg in the ffmpeg-python library
+ffmpeg._ffmpeg_exe = ffmpeg_path
 
 def video_operation():
     videoFilePath = videoFileNameEntry.get()
@@ -18,9 +27,10 @@ def video_operation():
         messagebox.showinfo("File not found", "The file specified does not exist. Re-enter a file path")
     else:
         #messagebox.showinfo("File found", "This test is successful")
-        segment_length = segmentLengthEntry.get()
-        #split_video(filename, segment_length)
-        messagebox.showinfo("File Found", "Segment length read as: " + str(segment_length))
+        segment_length = chunkLengthEntry.get()
+        threading.Thread(target=split_video, args=(videoFilePath, segment_length, update_progress)).start()
+        #split_video(videoFilePath, segment_length)
+        #messagebox.showinfo("File Found", "Segment length read as: " + str(segment_length))
 
 
 # Function to handle the submit button click
@@ -103,17 +113,22 @@ def startMenu():
 
 def video_upload():
     filename = videoFileNameEntry.get()
-    #clip = VideoFileClip(filename)
-    #duration = clip.duration
+    clip = VideoFileClip(filename)
+    duration = clip.duration
+    durationMinutes = duration/60
     fileSize = getFileSize(filename)
+    sizePerMinute = fileSize/durationMinutes
+    idealChunkSize = (5/sizePerMinute) * 60
 
     video_information_box.delete('1.0',END)
     video_information_box.insert('1.0', "Filename read as: " + str(filename))
-    video_information_box.insert('2.0', "\nLength of video: ")
-    video_information_box.insert('3.0', "\nSize of video: " + str(fileSize) + "GB")
-    #video_information_box.insert('2.0', "Video duration read as: " + str(duration))
+    video_information_box.insert('2.0', "\nLength of video (minutes): " + str(durationMinutes))
+    video_information_box.insert('3.0', "\nSize of video (GB): " + str(fileSize) + " GB")
+    video_information_box.insert('4.0', "\nSize per minute of video: " + str(sizePerMinute) + " GB")
 
-def split_video(filename, segment_length):
+    video_information_box.insert('5.0', "\n\nIn order to receive video chunks smaller than 5GB, specify that your chunks are less than " + str(idealChunkSize) + " seconds long.")
+
+def split_video2(filename, segment_length): #DEPRECATED
     segment_length = int(segment_length)
     clip = VideoFileClip(filename)
     duration = clip.duration
@@ -124,20 +139,89 @@ def split_video(filename, segment_length):
     start_time = 0
     end_time = segment_length
     i = 1
-    # Extract the filename without extension
     basename = os.path.basename(filename).split('.')[0]
+    extension = os.path.basename(filename).split('.')[1]
 
     while start_time < duration:
-        # Create output filename based on original filename. Add parameters here?!
-        output = os.path.join(f"{basename}_part{i}.mp4")
+        output = os.path.join(f"{basename}_part{i}."+str(extension))
         print("Output listed as: " + str(output))
-        ffmpeg_extract_subclip(filename, start_time, min(end_time, duration), targetname=output)
+        
+        # Construct ffmpeg command
+        #command = [
+        #    ffmpeg_path,
+        #    '-ss', str(start_time),
+        #    '-i', filename,
+        #    '-to', str(min(end_time, duration)),
+        #    '-c:v', 'libx264',  # Set video codec to H.264
+        #    '-c:a', 'aac',      # Set audio codec to AAC
+        #    '-strict', 'experimental',  # Allow experimental codecs if needed
+        #    output
+        #]
+
+        # Construct ffmpeg command
+        command = [
+            ffmpeg_path,
+            '-ss', str(start_time),
+            '-i', filename,
+            '-to', str(min(end_time, duration)),
+            '-c', 'copy',
+            output
+        ]
+
+        # Run the command
+        subprocess.run(command, check=True)
+
         start_time = end_time
         end_time += segment_length
-        files.download(output)
         i += 1
 
     print(f'Video split into {i-1} parts.')
+
+def split_video(filename, segment_length, progress_callback):
+    segment_length = int(segment_length)
+    clip = VideoFileClip(filename)
+    duration = clip.duration
+    print("Segment length read as: " + str(segment_length))
+    print("Filename read as: " + str(filename))
+    print("Duration read as: " + str(duration))
+
+    start_time = 0
+    end_time = segment_length
+    i = 1
+    basename = os.path.basename(filename).split('.')[0]
+    extension = os.path.basename(filename).split('.')[1]
+    total_segments = int(duration / segment_length) + 1
+
+    while start_time < duration:
+        output = os.path.join(f"{basename}_part{i}."+str(extension))
+        print("Output listed as: " + str(output))
+        
+        # Construct ffmpeg command
+        command = [
+            ffmpeg_path,
+            '-ss', str(start_time),
+            '-i', filename,
+            '-to', str(min(end_time, duration)),
+            '-c', 'copy',
+            output
+        ]
+
+        # Run the command
+        subprocess.run(command, check=True)
+
+        start_time = end_time
+        end_time += segment_length
+        i += 1
+        
+        # Update progress
+        progress = i - 1
+        progress_callback(progress / total_segments)
+
+    print(f'Video split into {i-1} parts.')
+
+def update_progress(progress):
+    progress_bar['value'] = progress * 100
+    page2.update_idletasks()
 
 def getMetadataFile(listOfFiles):
     metadataFile = input("Which file contains your metadata? ")
@@ -331,6 +415,9 @@ if __name__ == "__main__":
     chunkLengthInstructions = tk.Label(page2_label_frame, text="Enter the length (in seconds) that you would like each video chunk to be. Note that the last chunk may be shorter than the rest.", font=('Arial', 8), justify=tk.LEFT, anchor="w")
     chunkLengthInstructions.bind('<Configure>', lambda e: chunkLengthInstructions.config(wraplength=chunkLengthInstructions.winfo_width()))
     chunkLengthInstructions.pack(pady=5, fill=tk.X, expand=True)
+
+    progress_bar = ttk.Progressbar(page2, orient="horizontal", length=300, mode="determinate")
+    progress_bar.pack(padx=10, pady=10)
 
     split_video_button = tk.Button(page2, text="Split Video", command=video_operation, bg="lightGrey", fg="black")
     split_video_button.pack(pady=20)
