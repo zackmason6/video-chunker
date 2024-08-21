@@ -1,7 +1,6 @@
 import os
 import sys
 import pandas as pd
-#import docx
 import csv
 import subprocess
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
@@ -181,25 +180,10 @@ def update_progress(progress):
     progress_bar['value'] = progress * 100
     page2.update_idletasks()
 
-def getMetadataFile(listOfFiles):
-    metadataFile = input("Which file contains your metadata? ")
-    if metadataFile not in listOfFiles:
-        print("Invalid entry.\n")
-        getMetadataFile(listOfFiles)
-    return metadataFile
-
 def getFileSize(file_name):
     file_stats = os.stat(file_name)
     fileSize = file_stats.st_size / (1024 * 1024 * 1024)
     return fileSize
-
-def getData(dataSheet,columnHeader):
-  """
-  This function performs all of the necessary data gathering from the tracking spreadsheet.
-  Additionally, it passes this information to the sendMimeEmail function.
-  """
-  cellValue = dataSheet.loc[1, columnHeader]
-  return cellValue
 
 def create_page_content(page):
     # Top frame
