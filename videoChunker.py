@@ -11,6 +11,7 @@ from tkinter import ttk
 from tkinter import END
 import ffmpeg
 import threading
+import datetime
 
 ########## THINGS TO ADD #############
 # VIDEO CONVERSIONS?
@@ -21,13 +22,19 @@ ffmpeg_path = 'C:/Users/Zack_Mason/Desktop/coding/codingProjects/videoChunker/ff
 # Update the path to ffmpeg in the ffmpeg-python library
 ffmpeg._ffmpeg_exe = ffmpeg_path
 
+def on_option_change(*args):
+    selected_option = option_var.get()
+    print(f"Selected option: {selected_option}")
+    return selected_option
+
 def video_operation():
+    dropdown_option = option_var.get()
+
     videoFilePath = videoFileNameEntry.get()
     file_exists = os.path.isfile(videoFilePath)
     if not file_exists:
         messagebox.showinfo("File not found", "The file specified does not exist. Re-enter a file path")
     else:
-        #messagebox.showinfo("File found", "This test is successful")
         segment_length = chunkLengthEntry.get()
         threading.Thread(target=split_video, args=(videoFilePath, segment_length, update_progress)).start()
         #split_video(videoFilePath, segment_length)
@@ -122,6 +129,7 @@ def video_upload():
     video_information_box.insert('5.0', "\n\nIn order to receive video chunks smaller than 5GB, specify that your chunks are less than " + str(idealChunkSize) + " seconds long.")
 
 def split_video(filename, segment_length, progress_callback):
+    dropdown_option = option_var.get()
     segment_length = int(segment_length)
     clip = VideoFileClip(filename)
     duration = clip.duration
@@ -134,36 +142,65 @@ def split_video(filename, segment_length, progress_callback):
     i = 1
     
     basename = os.path.basename(filename).split('.')[0]
-    extension = os.path.basename(filename).split('.')[1]
+    if dropdown_option == "No Conversion":
+        extension = os.path.basename(filename).split('.')[1]
+    else:
+        extension = "." + dropdown_option.lower()
     total_segments = int(duration / segment_length) + 1
 
     while start_time < duration:
-        output = os.path.join(f"{basename}_part{i}."+str(extension))
+        
+        print("START TIME LISTED AS: " + str(start_time))
+        print("END TIME LISTED AS: " + str(end_time))
+        startTimeConverted = str(datetime.timedelta(seconds = start_time))
+        startTimeConverted = startTimeConverted.replace(":","-")
+        endTimeConverted = str(datetime.timedelta(seconds = end_time))
+        endTimeConverted = endTimeConverted.replace(":","-")
+        #output = os.path.join(f"{basename}_part{i}."+str(extension))
+        output = os.path.join(f"{basename}_{startTimeConverted}_to_{endTimeConverted}."+str(extension))
         print("Output listed as: " + str(output))
         
-        # Construct ffmpeg command
-        #command = [
-        #    ffmpeg_path,
-        #    '-ss', str(start_time),
-        #    '-i', filename,
-        #    '-to', str(min(end_time, duration)),
-        #    '-c:v', 'libx264',  # Set video codec to H.264
-        #    '-c:a', 'aac',      # Set audio codec to AAC
-        #    '-strict', 'experimental',  # Allow experimental codecs if needed
-        #    output
-        #]
 
-        # Construct ffmpeg command
-        command = [
-            ffmpeg_path,
-            '-ss', str(start_time),
-            '-i', filename,
-            '-to', str(min(end_time, duration)),
-            '-c', 'copy',
-            output
-        ]
+        if dropdown_option == "No Conversion":
+            command = [
+                ffmpeg_path,
+                '-ss', str(start_time),
+                '-i', filename,
+                '-to', str(min(end_time, duration)),
+                '-c', 'copy',
+                output
+            ]
 
-        # Run the command
+        elif dropdown_option == "MP4":
+            vcodec ='libx264'
+            acodec = 'aac'
+            command = [
+                ffmpeg_path,
+                '-ss', str(start_time),
+                '-i', filename,
+                '-to', str(min(end_time, duration)),
+                '-c:v', vcodec,
+                '-c:a', acodec,
+                '-strict', 'experimental',
+                output
+            ]
+
+        elif dropdown_option == "MOV":
+            vcodec ='libx264'
+            acodec = 'aac'
+            command = [
+                ffmpeg_path,
+                '-ss', str(start_time),
+                '-i', filename,
+                '-to', str(min(end_time, duration)),
+                '-c:v', vcodec,
+                '-c:a', acodec,
+                '-strict', 'experimental',
+                output
+
+            ]
+
+        # Run the ffmpeg command
         subprocess.run(command, check=True)
 
         start_time = end_time
@@ -174,7 +211,7 @@ def split_video(filename, segment_length, progress_callback):
         progress = i - 1
         progress_callback(progress / total_segments)
 
-    print(f'Video split into {i-1} parts.')
+    #print(f'Video split into {i-1} parts.')
 
 def update_progress(progress):
     progress_bar['value'] = progress * 100
@@ -320,6 +357,23 @@ if __name__ == "__main__":
     chunkLengthInstructions = tk.Label(page2_label_frame, text="Enter the length (in seconds) that you would like each video chunk to be. Note that the last chunk may be shorter than the rest.", font=('Arial', 8), justify=tk.LEFT, anchor="w")
     chunkLengthInstructions.bind('<Configure>', lambda e: chunkLengthInstructions.config(wraplength=chunkLengthInstructions.winfo_width()))
     chunkLengthInstructions.pack(pady=5, fill=tk.X, expand=True)
+
+
+    dropdownLabel = tk.Label(page2_label_frame, text="If you want to convert your output files, select a new file type:", font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
+    dropdownLabel.pack(pady=5, fill=tk.X, expand=True)
+    # Set options for video conversion dropdown list
+    options = ["No Conversion", "MP4", "MOV"]
+
+    # Set variable to contain user choice from conversion dropdown
+    option_var = tk.StringVar(page2)
+    option_var.set(options[0])  # Set default value
+
+    # Create the OptionMenu dropdown widget
+    dropdown = tk.OptionMenu(page2, option_var, *options)
+    dropdown.pack(pady=20)
+
+    # get the user choice from dropdown menu
+    option_var.trace("w", on_option_change)
 
     progress_bar = ttk.Progressbar(page2, orient="horizontal", length=300, mode="determinate")
     progress_bar.pack(padx=10, pady=10)
