@@ -13,6 +13,8 @@ from tkinter import END
 import ffmpeg
 import threading
 
+########## THINGS TO ADD #############
+# VIDEO CONVERSIONS?
 
 # Path to the ffmpeg executable
 ffmpeg_path = 'C:/Users/Zack_Mason/Desktop/coding/codingProjects/videoChunker/ffmpeg-2024-08-15-git-1f801dfdb5-essentials_build/bin/ffmpeg.exe'
@@ -30,7 +32,7 @@ def video_operation():
         segment_length = chunkLengthEntry.get()
         threading.Thread(target=split_video, args=(videoFilePath, segment_length, update_progress)).start()
         #split_video(videoFilePath, segment_length)
-        messagebox.showinfo("Video split operation started. Progress bar will update shortly...")
+        messagebox.showinfo("Video Split","Video split operation started. Do not click the split video button again.\nProgress bar will update shortly...")
 
 # Function to handle the submit button click
 def submit_data():
@@ -73,7 +75,7 @@ def submit_data():
             writer.writerow(["Project ID (or CruiseID)", "DiveID", "Dive Site Name","Collecting Platform Name","Camera Type/Code","Dive Start Date","Dive End Date","Dive Start Time","Dive End Time","Dive Duration","Dive On Bottom Timestamp", "Dive Off Bottom Timestamp", "Max Depth (m)", "Minimum Depth (m)", "North Latitude", "South Latitude", "East Longitude", "West Longitude", "Project/Cruise Abstract","Dive Abstract", "Dive Objectives", "Dive Keywords", "Underwater Cultural Heritage (UCH) Restrictions?"])
         
         # Write the data from the text fields
-        writer.writerow([field1_data, field2_data, field3_data, field4_data, field5_data, field6_data, field7_data, field8_data, field9_data, field10_data])
+        writer.writerow([field1_data, field2_data, field3_data, field4_data, field5_data, field6_data, field7_data, field8_data, field9_data, field10_data, field11_data, field12_data, field13_data, field14_data, field15_data, field16_data, field17_data, field18_data, field19_data, field20_data,field21_data, field22_data, field23_data])
     
     # Inform the user that the data has been saved
     messagebox.showinfo("Data Saved", "The data has been successfully saved to the 'metadata' spreadsheet in your working directory.")
@@ -131,6 +133,7 @@ def split_video(filename, segment_length, progress_callback):
     start_time = 0
     end_time = segment_length
     i = 1
+    
     basename = os.path.basename(filename).split('.')[0]
     extension = os.path.basename(filename).split('.')[1]
     total_segments = int(duration / segment_length) + 1
