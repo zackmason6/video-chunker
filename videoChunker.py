@@ -1,6 +1,5 @@
 import os
 import sys
-import pandas as pd
 import csv
 import subprocess
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
@@ -13,12 +12,12 @@ import ffmpeg
 import threading
 import datetime
 
-########## THINGS TO ADD #############
-# VIDEO CONVERSIONS?
-
 # Path to the ffmpeg executable
-ffmpeg_path = 'C:/Users/Zack_Mason/Desktop/coding/codingProjects/videoChunker/ffmpeg-2024-08-15-git-1f801dfdb5-essentials_build/bin/ffmpeg.exe'
-
+#ffmpeg_path = 'C:/Users/Zack_Mason/Desktop/coding/codingProjects/videoChunker/ffmpeg-2024-08-15-git-1f801dfdb5-essentials_build/bin/ffmpeg.exe'
+myDirectory = os.getcwd()
+#ffmpeg_path = str(myDirectory) + '/ffmpeg-2024-08-15-git-1f801dfdb5-essentials_build/bin/ffmpeg.exe'
+ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'ffmpeg.exe')
+print("Looking for ffmpeg here: " + str(ffmpeg_path))
 # Update the path to ffmpeg in the ffmpeg-python library
 ffmpeg._ffmpeg_exe = ffmpeg_path
 
