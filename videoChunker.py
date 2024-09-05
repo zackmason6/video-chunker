@@ -602,8 +602,6 @@ if __name__ == "__main__":
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
     videoFileName.pack(pady=5, fill=tk.X, expand=True)
     videoFileNameEntry = tk.Entry(label_frame)
-    videoFileNameEntry.bind('<Configure>',
-        lambda e: videoFileNameEntry.config(wraplength=videoFileNameEntry.winfo_width()))
     videoFileNameEntry.pack(pady=5, fill=tk.X, expand=True)
     videoFileNameInstructions = tk.Label(label_frame,
         text="If this video is in your working directory, just enter the filename. Be sure to "+
@@ -619,8 +617,6 @@ if __name__ == "__main__":
     videoSizeLabel.pack(pady=5, fill=tk.X, expand=True)
 
     videoSizeEntry = tk.Entry(label_frame)
-    videoSizeEntry.bind('<Configure>',
-        lambda e: videoSizeEntry.config(wraplength=videoSizeEntry.winfo_width()))
     videoSizeEntry.pack(pady=5, fill=tk.X, expand=True)
     
     videoSizeInstructions = tk.Label(label_frame,
@@ -631,8 +627,6 @@ if __name__ == "__main__":
     videoSizeInstructions.pack(pady=5, fill=tk.X, expand=True)
 
     video_information_box = tk.Text(bottom_frame,height=6)
-    video_information_box.bind('<Configure>',
-        lambda e: video_information_box.config(wraplength=video_information_box.winfo_width()))
     video_information_box.pack(pady=5,fill=tk.X, expand =True)
     video_information_box.delete('1.0',END)
     video_information_box.insert('1.0',
@@ -663,8 +657,6 @@ if __name__ == "__main__":
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
     updatedFileName.pack(pady=5, fill=tk.X, expand=True)
     updated_file_name_entry = tk.Entry(page2_label_frame)
-    updated_file_name_entry.bind('<Configure>',
-        lambda e: updated_file_name_entry.config(wraplength=updated_file_name_entry.winfo_width()))
     updated_file_name_entry.pack(pady=5, fill=tk.X, expand=True)
     updatedFileNameInstructions = tk.Label(page2_label_frame, text="If you would like to change"+
         " the name of the output files to something that doesn't match the input filename, enter"+
@@ -678,8 +670,6 @@ if __name__ == "__main__":
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
     chunkLength.pack(pady=5, fill=tk.X, expand=True)
     chunkLengthEntry = tk.Entry(page2_label_frame)
-    chunkLengthEntry.bind('<Configure>',
-        lambda e: chunkLengthEntry.config(wraplength=chunkLengthEntry.winfo_width()))
     chunkLengthEntry.pack(pady=5, fill=tk.X, expand=True)
     chunkLengthInstructions = tk.Label(page2_label_frame,
         text="Enter the length (in seconds) that you would like each video chunk to be. Note that"+
