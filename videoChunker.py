@@ -111,10 +111,6 @@ def video_operation():
       the user inputs the path to the video file.
     - The `chunkLengthEntry` should be a Tkinter entry widget where the
       user specifies the segment length for the video chunks.
-    - The `split_video` function is assumed to be defined elsewhere and
-      is responsible for splitting the video into chunks.
-    - The `update_progress` function is assumed to be defined elsewhere
-      and is used to update the progress of the video splitting operation.
     - Ensure that `threading` is imported and used to run the video
       splitting operation in a separate thread to avoid blocking the main
       thread.
@@ -124,13 +120,17 @@ def video_operation():
     if not file_exists:
         messagebox.showinfo("File not found",
             "The file specified does not exist. Re-enter a file path")
+        return None
     else:
         segment_length = chunkLengthEntry.get()
-        threading.Thread(target=split_video, args=(video_file_path,
-        segment_length, update_progress)).start()
-        messagebox.showinfo("Video Split",
-            "Video split operation started. Do not click the split video button again."+
-            " Progress bar will update shortly...")
+        if len(segment_length)<1:
+            return None
+        else:
+            threading.Thread(target=split_video, args=(video_file_path,
+            segment_length, update_progress)).start()
+            messagebox.showinfo("Video Split",
+                "Video split operation started. Do not click the split video button again."+
+                " Progress bar will update shortly...")
 
 def submit_data():
     """
@@ -278,29 +278,48 @@ def video_upload():
       provides the path to the video file.
     - The `video_information_box` is expected to be a text widget where the video 
       statistics are displayed.
-    - The `get_file_size` function is assumed to be defined elsewhere in the code to 
-      retrieve the file size in gigabytes.
     - The `VideoFileClip` class from the `moviepy` library is used to get the video 
       duration.
 
     """
+
+    video_file_path = videoFileNameEntry.get()
+    file_exists = os.path.isfile(video_file_path)
+    if not file_exists:
+        messagebox.showinfo("File not found",
+            "The file specified does not exist. Re-enter a file path")
+        return None
+
     filename = videoFileNameEntry.get()
     clip = VideoFileClip(filename)
     duration = clip.duration
     duration_minutes = duration/60
     file_size = get_file_size(filename)
     size_per_minute = file_size/duration_minutes
-    ideal_chunk_size = (5/size_per_minute) * 60
+
+    try:
+        desired_video_size = videoSizeEntry.get()
+        if len(desired_video_size)<1:
+            desired_video_size = 5
+        else:
+            desired_video_size = int(desired_video_size)
+    except:
+        messagebox.showinfo("Invalid Input",
+            "Please enter an integer value for desired video size(GB). "+
+            "Currently using the default value of 5 GB.")
+        desired_video_size = 5
+
+    ideal_chunk_size = (desired_video_size/size_per_minute) * 60
 
     # The block below populates a text box with pertinent info for the user about their video file
     video_information_box.delete('1.0',END)
-    video_information_box.insert('1.0', "Filename read as: " + str(filename))
-    video_information_box.insert('2.0', "\nLength of video (minutes): " + str(duration_minutes))
-    video_information_box.insert('3.0', "\nSize of video (GB): " + str(file_size) + " GB")
-    video_information_box.insert('4.0',
+    video_information_box.insert('1.0', "Length of video (minutes): " + str(duration_minutes))
+    video_information_box.insert('2.0', "\nSize of video (GB): " + str(file_size) + " GB")
+    video_information_box.insert('3.0',
         "\nSize per minute of video: " + str(size_per_minute) + " GB")
-    video_information_box.insert('5.0',"\n\n",
-    "In order to receive video chunks smaller than 5GB, specify that your chunks are less than " +
+    video_information_box.insert('4.0',"\n\n"+
+        "In order to receive video chunks smaller than "+ str(desired_video_size) +
+        " GB, specify that your chunks are less than " +
         str(ideal_chunk_size) + " seconds long.")
 
 def split_video(filename, segment_length, progress_callback):
@@ -595,7 +614,23 @@ if __name__ == "__main__":
         lambda e: videoFileNameInstructions.config(wraplength=videoFileNameInstructions.winfo_width()))
     videoFileNameInstructions.pack(pady=5, fill=tk.X, expand=True)
 
-    video_information_box = tk.Text(bottom_frame,height=10)
+    videoSizeLabel = tk.Label(label_frame, text="Desired Video Segment Size (GB):",
+        font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
+    videoSizeLabel.pack(pady=5, fill=tk.X, expand=True)
+
+    videoSizeEntry = tk.Entry(label_frame)
+    videoSizeEntry.bind('<Configure>',
+        lambda e: videoSizeEntry.config(wraplength=videoSizeEntry.winfo_width()))
+    videoSizeEntry.pack(pady=5, fill=tk.X, expand=True)
+    
+    videoSizeInstructions = tk.Label(label_frame,
+        text="Enter the maximum video segment size in GB",
+        font=('Arial', 8), justify=tk.LEFT, anchor="w")
+    videoSizeInstructions.bind('<Configure>',
+        lambda e: videoSizeInstructions.config(wraplength=videoSizeInstructions.winfo_width()))
+    videoSizeInstructions.pack(pady=5, fill=tk.X, expand=True)
+
+    video_information_box = tk.Text(bottom_frame,height=6)
     video_information_box.bind('<Configure>',
         lambda e: video_information_box.config(wraplength=video_information_box.winfo_width()))
     video_information_box.pack(pady=5,fill=tk.X, expand =True)
@@ -653,7 +688,6 @@ if __name__ == "__main__":
     chunkLengthInstructions.bind('<Configure>',
         lambda e: chunkLengthInstructions.config(wraplength=chunkLengthInstructions.winfo_width()))
     chunkLengthInstructions.pack(pady=5, fill=tk.X, expand=True)
-
 
     dropdownLabel = tk.Label(page2_label_frame,
         text="If you want to convert your output files, select a new file type:",
