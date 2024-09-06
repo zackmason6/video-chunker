@@ -18,6 +18,4 @@ To Do:
 3. Need to really test the video converter tool. Have not tested on a wide variety of file types.
 4. Clean up some ugly sections of code. Looking at you submit_data function. Yikes.
 5. Process doesn't quit when GUI is closed. Is this a feature or a bug? You decide. Should likely ask if this is an issue or not. Might be kind of nice to close the window and let it run in the background.
-6. Add descriptions and examples to metadata tab. They're pretty empty right now. Waiting on stakeholder input for this one I think.
-6a. Maybe replace some of the free text entries with drop down menus or something else. Waiting on stakeholder input.
-7. Fix vertical resizing of GUI! Doesn't look great when resized vertically. Not super functional at the moment.
+6. Fix vertical resizing of GUI! Doesn't look great when resized vertically. Not super functional at the moment.
