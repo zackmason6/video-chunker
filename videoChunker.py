@@ -116,6 +116,7 @@ def video_operation():
       thread.
     """
     video_file_path = videoFileNameEntry.get()
+    video_file_path = video_file_path.replace('"','')
     file_exists = os.path.isfile(video_file_path)
     if not file_exists:
         messagebox.showinfo("File not found",
@@ -124,13 +125,12 @@ def video_operation():
     else:
         segment_length = chunkLengthEntry.get()
         if len(segment_length)<1:
+            messagebox.showinfo("Missing Information",
+                "Enter the desired length for your video segments.")
             return None
         else:
             threading.Thread(target=split_video, args=(video_file_path,
             segment_length, update_progress)).start()
-            messagebox.showinfo("Video Split",
-                "Video split operation started. Do not click the split video button again."+
-                " Progress bar will update shortly...")
 
 def submit_data():
     """
@@ -295,13 +295,14 @@ def video_upload():
     """
 
     video_file_path = videoFileNameEntry.get()
+    video_file_path = video_file_path.replace('"','')
     file_exists = os.path.isfile(video_file_path)
     if not file_exists:
         messagebox.showinfo("File not found",
             "The file specified does not exist. Re-enter a file path")
         return None
 
-    filename = videoFileNameEntry.get()
+    filename = video_file_path
     clip = VideoFileClip(filename)
     duration = clip.duration
     duration_minutes = duration/60
@@ -393,15 +394,29 @@ def split_video(filename, segment_length, progress_callback):
     if len(file_name_update)>0:
         basename = file_name_update
 
+    if len(basename)<6:
+        messagebox.showinfo("File not found",
+            "The file specified does not exist. Re-enter a file path")
+        return None
+    
+    basename_date_check = basename[-8:]
+    if basename_date_check.isdigit() == False:
+        messagebox.showinfo("Bad File Name Format",
+            "Your file name should end with a date in this format: FILENAME_YYYYMMDD. Please enter a new file name in the appropriate section.")
+        return None
+
+    messagebox.showinfo("Video Split",
+        "Video split operation started. Do not click the split video button again."+
+        " Progress bar will update shortly...")
     while start_time < duration:
         print("START TIME LISTED AS: " + str(start_time))
         print("END TIME LISTED AS: " + str(end_time))
         start_time_converted = str(datetime.timedelta(seconds = start_time))
-        start_time_converted = start_time_converted.replace(":","-")
+        start_time_converted = start_time_converted.replace(":","")
         end_time_converted = str(datetime.timedelta(seconds = end_time))
-        end_time_converted = end_time_converted.replace(":","-")
+        end_time_converted = end_time_converted.replace(":","")
         #output = os.path.join(f"{basename}_part{i}."+str(extension))
-        output = os.path.join(f"{basename}_{start_time_converted}_to_{end_time_converted}."+
+        output = os.path.join(f"{basename}T{start_time_converted}Z."+
             str(extension))
         print("Output listed as: " + str(output))
 
@@ -416,6 +431,7 @@ def split_video(filename, segment_length, progress_callback):
             ]
 
         elif dropdown_option == "MP4":
+            output = output.replace('..','.')
             vcodec ='libx264'
             acodec = 'aac'
             command = [
@@ -430,6 +446,7 @@ def split_video(filename, segment_length, progress_callback):
             ]
 
         elif dropdown_option == "MOV":
+            output = output.replace('..','.')
             vcodec ='libx264'
             acodec = 'aac'
             command = [
@@ -454,6 +471,12 @@ def split_video(filename, segment_length, progress_callback):
         # Update progress
         progress = i - 1
         progress_callback(progress / total_segments)
+        if progress == total_segments:
+            progress = 0
+            progress_callback(progress)
+            messagebox.showinfo("Processing Complete",
+            "Your video has been successfully processed.")
+
 
 def update_progress(progress):
     """
@@ -668,8 +691,8 @@ if __name__ == "__main__":
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
     updatedFileName.pack(pady=5, fill=tk.X, expand=True)
     updatedFileNameInstructions = tk.Label(page2_label_frame, text="If your file name does not"+
-        " include the start date and time, enter a new filename that follows this convention: "+
-        " PathToOutputFile/FILENAME_YYYYMMDDTHHMMSSZ_",
+        " include the start date, enter a new filename that follows this convention: "+
+        " FILENAME_YYYYMMDD (Example: Dive0982_20240916)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
     updatedFileNameInstructions.bind('<Configure>',
         lambda e: updatedFileNameInstructions.config(wraplength=updatedFileNameInstructions.winfo_width()))
