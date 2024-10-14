@@ -49,6 +49,7 @@ ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'ffmpeg.exe')
 # Update the path to ffmpeg in the ffmpeg-python library
 ffmpeg._ffmpeg_exe = ffmpeg_path
 
+
 def on_option_change(*args):
     """
     Handles changes in the selection of a dropdown menu.
@@ -77,6 +78,7 @@ def on_option_change(*args):
     selected_option = option_var.get()
     print(f"Selected option: {selected_option}")
     return selected_option
+
 
 def video_operation():
     """
@@ -107,15 +109,15 @@ def video_operation():
       thread to remain responsive.
 
     Notes:
-    - The `videoFileNameEntry` should be a Tkinter entry widget where
+    - The `video_file_name_entry` should be a Tkinter entry widget where
       the user inputs the path to the video file.
-    - The `chunkLengthEntry` should be a Tkinter entry widget where the
+    - The `chunk_length_entry` should be a Tkinter entry widget where the
       user specifies the segment length for the video chunks.
     - Ensure that `threading` is imported and used to run the video
       splitting operation in a separate thread to avoid blocking the main
       thread.
     """
-    video_file_path = videoFileNameEntry.get()
+    video_file_path = video_file_name_entry.get()
     video_file_path = video_file_path.replace('"','')
     file_exists = os.path.isfile(video_file_path)
     if not file_exists:
@@ -123,7 +125,7 @@ def video_operation():
             "The file specified does not exist. Re-enter a file path")
         return None
     else:
-        segment_length = chunkLengthEntry.get()
+        segment_length = chunk_length_entry.get()
         if len(segment_length)<1:
             messagebox.showinfo("Missing Information",
                 "Enter the desired length for your video segments.")
@@ -131,6 +133,7 @@ def video_operation():
         else:
             threading.Thread(target=split_video, args=(video_file_path,
             segment_length, update_progress)).start()
+
 
 def submit_data():
     """
@@ -190,11 +193,11 @@ def submit_data():
     field22_data = entry22.get()
     field23_data = entry23.get()
 
-    requiredFields = [field1_data,field2_data,field3_data,field4_data,field5_data,
+    required_fields = [field1_data,field2_data,field3_data,field4_data,field5_data,
         field6_data,field7_data,field8_data,field13_data,field15_data,field16_data,
         field17_data,field18_data,field19_data,field20_data,field21_data,field22_data,
         field23_data]
-    for myData in requiredFields:
+    for myData in required_fields:
         if len(str(myData))<1:
             messagebox.showinfo("Required Fields Incomplete",
             "Please fill in all required fields. These are bolded and marked"+
@@ -252,6 +255,7 @@ def submit_data():
     entry22.delete(0, tk.END)
     entry23.delete(0, tk.END)
 
+
 def video_upload():
     """
     Retrieves and displays statistics about the selected video file
@@ -285,7 +289,7 @@ def video_upload():
       - Recommended chunk size to achieve chunks smaller than 5 GB
 
     Notes:
-    - The `videoFileNameEntry` is expected to be an entry widget where the user 
+    - The `video_file_name_entry` is expected to be an entry widget where the user 
       provides the path to the video file.
     - The `video_information_box` is expected to be a text widget where the video 
       statistics are displayed.
@@ -294,7 +298,7 @@ def video_upload():
 
     """
 
-    video_file_path = videoFileNameEntry.get()
+    video_file_path = video_file_name_entry.get()
     video_file_path = video_file_path.replace('"','')
     file_exists = os.path.isfile(video_file_path)
     if not file_exists:
@@ -310,7 +314,7 @@ def video_upload():
     size_per_minute = file_size/duration_minutes
 
     try:
-        desired_video_size = videoSizeEntry.get()
+        desired_video_size = video_size_entry.get()
         if len(desired_video_size)<1:
             desired_video_size = 5
         else:
@@ -333,6 +337,7 @@ def video_upload():
         "In order to receive video chunks smaller than "+ str(desired_video_size) +
         " GB, specify that your chunks are less than " +
         str(ideal_chunk_size) + " seconds long.")
+
 
 def split_video(filename, segment_length, progress_callback):
     """
@@ -485,6 +490,7 @@ def update_progress(progress):
     progress_bar['value'] = progress * 100
     page2.update_idletasks()
 
+
 def get_file_size(file_name):
     """
     Retrieves the size of a file in gigabytes.
@@ -512,6 +518,7 @@ def get_file_size(file_name):
     file_stats = os.stat(file_name)
     file_size = file_stats.st_size / (1024 * 1024 * 1024)
     return file_size
+
 
 def create_page_content(my_page):
     """
@@ -612,14 +619,12 @@ if __name__ == "__main__":
     page3 = ttk.Frame(notebook)
     notebook.add(page3, text="Generate Metadata")
 
-    pageList = [page1,page2,page3]
-
     app.geometry("600x700")
-
-    for page in pageList:
+    page_list = [page1,page2,page3]
+    for page in page_list:
         create_page_content(page)
 
-    ############################# PAGE 1 CONTENT STARTS HERE #################################
+    # PAGE 1 CONTENT STARTS HERE
     bottom_frame = tk.Frame(page1)
     bottom_frame.pack(fill=tk.X, padx=10, pady=10)
 
@@ -632,33 +637,31 @@ if __name__ == "__main__":
     test_label = tk.Label(label_frame, text = 'Enter Video Information', font=('Arial', 12, 'bold'))
     test_label.pack(expand = True)
 
-    videoFileName = tk.Label(label_frame, text="Video File Path:",
+    video_file_name = tk.Label(label_frame, text="Video File Path:",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    videoFileName.pack(pady=5, fill=tk.X, expand=True)
-    videoFileNameInstructions = tk.Label(label_frame,
+    video_file_name.pack(pady=5, fill=tk.X, expand=True)
+    video_file_name_instructions = tk.Label(label_frame,
         text="If this video is in your working directory, just enter the filename. Be sure to "+
         "include the extension (.mov or .mp4). Get the full file path by finding the file in "+
         "file explorer, right clicking it and selecting 'properties.'",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    videoFileNameInstructions.bind('<Configure>',
-        lambda e: videoFileNameInstructions.config(wraplength=videoFileNameInstructions.winfo_width()))
-    videoFileNameInstructions.pack(pady=5, fill=tk.X, expand=True)
-    videoFileNameEntry = tk.Entry(label_frame)
-    videoFileNameEntry.pack(pady=5, fill=tk.X, expand=True)
+    video_file_name_instructions.bind('<Configure>',
+        lambda e: video_file_name_instructions.config(wraplength=video_file_name_instructions.winfo_width()))
+    video_file_name_instructions.pack(pady=5, fill=tk.X, expand=True)
+    video_file_name_entry = tk.Entry(label_frame)
+    video_file_name_entry.pack(pady=5, fill=tk.X, expand=True)
 
-    videoSizeLabel = tk.Label(label_frame, text="Desired Video Segment Size (GB):",
+    video_size_label = tk.Label(label_frame, text="Desired Video Segment Size (GB):",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    videoSizeLabel.pack(pady=5, fill=tk.X, expand=True)
-    videoSizeInstructions = tk.Label(label_frame,
+    video_size_label.pack(pady=5, fill=tk.X, expand=True)
+    video_size_instructions = tk.Label(label_frame,
         text="Enter the maximum video segment size in GB",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    videoSizeInstructions.bind('<Configure>',
-        lambda e: videoSizeInstructions.config(wraplength=videoSizeInstructions.winfo_width()))
-    videoSizeInstructions.pack(pady=5, fill=tk.X, expand=True)
-    videoSizeEntry = tk.Entry(label_frame)
-    videoSizeEntry.pack(pady=5, fill=tk.X, expand=True)
-    
-
+    video_size_instructions.bind('<Configure>',
+        lambda e: video_size_instructions.config(wraplength=video_size_instructions.winfo_width()))
+    video_size_instructions.pack(pady=5, fill=tk.X, expand=True)
+    video_size_entry = tk.Entry(label_frame)
+    video_size_entry.pack(pady=5, fill=tk.X, expand=True)
 
     video_information_box = tk.Text(bottom_frame,height=6)
     video_information_box.pack(pady=5,fill=tk.X, expand =True)
@@ -672,51 +675,49 @@ if __name__ == "__main__":
         command=video_upload, bg="lightGrey", fg="black")
     submit_button.pack(pady=20)
 
- ################### PAGE 2 CONTENT STARTS HERE ###################
-
+    # PAGE 2 CONTENT STARTS HERE
     page2_bottom_frame = tk.Frame(page2)
     page2_bottom_frame.pack(fill=tk.X, padx=10, pady=10)
 
     # Create a frame for the label of the required dimension at the required place
     page2_label_frame = tk.Frame(page2_bottom_frame, width = 200, height = 20)
     page2_label_frame.pack(fill=tk.X,padx=5,pady=5)
-    #label_frame.place(x = 60, y = 100)
 
     # Create the label and pack it to fill the whole frame (default anchor is Centre)
     page2_test_label = tk.Label(page2_label_frame, text = 'Enter Chunking Parameters',
         font=('Arial', 12, 'bold'))
     page2_test_label.pack(expand = True)
 
-    updatedFileName = tk.Label(page2_label_frame, text="Updated Video Name (if applicable): ",
+    updated_file_name = tk.Label(page2_label_frame, text="Updated Video Name (if applicable): ",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    updatedFileName.pack(pady=5, fill=tk.X, expand=True)
-    updatedFileNameInstructions = tk.Label(page2_label_frame, text="If your file name does not"+
+    updated_file_name.pack(pady=5, fill=tk.X, expand=True)
+    updated_file_name_instructions = tk.Label(page2_label_frame, text="If your file name does not"+
         " include the start date, enter a new filename that follows this convention: "+
         " FILENAME_YYYYMMDD (Example: Dive0982_20240916)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    updatedFileNameInstructions.bind('<Configure>',
-        lambda e: updatedFileNameInstructions.config(wraplength=updatedFileNameInstructions.winfo_width()))
-    updatedFileNameInstructions.pack(pady=5, fill=tk.X, expand=True)
+    updated_file_name_instructions.bind('<Configure>',
+        lambda e: updated_file_name_instructions.config(wraplength=updated_file_name_instructions.winfo_width()))
+    updated_file_name_instructions.pack(pady=5, fill=tk.X, expand=True)
     updated_file_name_entry = tk.Entry(page2_label_frame)
     updated_file_name_entry.pack(pady=5, fill=tk.X, expand=True)
 
-    chunkLength = tk.Label(page2_label_frame, text="Desired length of video chunks (in seconds): ",
+    chunk_length = tk.Label(page2_label_frame, text="Desired length of video chunks (in seconds): ",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    chunkLength.pack(pady=5, fill=tk.X, expand=True)
-    chunkLengthInstructions = tk.Label(page2_label_frame,
+    chunk_length.pack(pady=5, fill=tk.X, expand=True)
+    chunk_length_instructions = tk.Label(page2_label_frame,
         text="Enter the length (in seconds) that you would like each video chunk to be. Note that"+
         " the last chunk may be shorter than the rest.",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    chunkLengthInstructions.bind('<Configure>',
-        lambda e: chunkLengthInstructions.config(wraplength=chunkLengthInstructions.winfo_width()))
-    chunkLengthInstructions.pack(pady=5, fill=tk.X, expand=True)
-    chunkLengthEntry = tk.Entry(page2_label_frame)
-    chunkLengthEntry.pack(pady=5, fill=tk.X, expand=True)
+    chunk_length_instructions.bind('<Configure>',
+        lambda e: chunk_length_instructions.config(wraplength=chunk_length_instructions.winfo_width()))
+    chunk_length_instructions.pack(pady=5, fill=tk.X, expand=True)
+    chunk_length_entry = tk.Entry(page2_label_frame)
+    chunk_length_entry.pack(pady=5, fill=tk.X, expand=True)
 
-    dropdownLabel = tk.Label(page2_label_frame,
+    dropdown_label = tk.Label(page2_label_frame,
         text="If you want to convert your output files, select a new file type:",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    dropdownLabel.pack(pady=5, fill=tk.X, expand=True)
+    dropdown_label.pack(pady=5, fill=tk.X, expand=True)
     # Set options for video conversion dropdown list
     options = ["No Conversion", "MP4", "MOV"]
 
@@ -739,8 +740,7 @@ if __name__ == "__main__":
         command=video_operation, bg="lightGrey", fg="black")
     split_video_button.pack(pady=20)
 
-    ############################### PAGE 3 STARTS HERE #############################
-
+    # PAGE 3 STARTS HERE
     # Create a frame that will contain the canvas and the scrollbar
     outer_frame = tk.Frame(page3)
     outer_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -821,217 +821,217 @@ if __name__ == "__main__":
     label1 = tk.Label(label_frame, text="* Project ID (or CruiseID): *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label1.pack(pady=5, fill=tk.X, expand=True)
-    projectIdInstructions = tk.Label(label_frame, text="(Use ID assigned"+
+    project_id_instructions = tk.Label(label_frame, text="(Use ID assigned"+
         " by cruise or NOAA Ocean Exploration.)\nExample: NF2202",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    projectIdInstructions.pack(pady=5, fill=tk.X, expand=True)
+    project_id_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry1 = tk.Entry(label_frame)
     entry1.pack(pady=5, fill=tk.X, expand=True)
 
     label2 = tk.Label(label_frame, text="* DiveID: *", font=('Arial', 9, 'bold'),
         justify=tk.LEFT, anchor="w")
     label2.pack(pady=5, fill=tk.X, expand=True)
-    diveIdInstructions = tk.Label(label_frame, text="(Open character.)"+
+    dive_id_instructions = tk.Label(label_frame, text="(Open character.)"+
         "\nExamples: D01, D001, GE01, AL4039",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    diveIdInstructions.pack(pady=5, fill=tk.X, expand=True)
+    dive_id_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry2 = tk.Entry(label_frame)
     entry2.pack(pady=5, fill=tk.X, expand=True)
 
     label3 = tk.Label(label_frame, text="* Dive Site Name: *", 
         font=('Arial', 9, 'bold'), justify=tk.LEFT, anchor="w")
     label3.pack(pady=5, fill=tk.X, expand=True)
-    diveSiteNameInstructions = tk.Label(label_frame, text="(Open Text.)"+
+    dive_site_name_instructions = tk.Label(label_frame, text="(Open Text.)"+
         "\nExample: Guayanilla Canyon",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    diveSiteNameInstructions.pack(pady=5, fill=tk.X, expand=True)
+    dive_site_name_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry3 = tk.Entry(label_frame)
     entry3.pack(pady=5, fill=tk.X, expand=True)
 
     label4 = tk.Label(label_frame, text="* Collecting Platform Name: *",
         font=('Arial', 9, 'bold'), justify=tk.LEFT, anchor="w")
     label4.pack(pady=5, fill=tk.X, expand=True)
-    platformInstructions = tk.Label(label_frame, text="(Open Text."+
+    platform_instruction = tk.Label(label_frame, text="(Open Text."+
         " Include platform type.)\nExample: Global Explorer ROV",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    platformInstructions.pack(pady=5, fill=tk.X, expand=True)
+    platform_instruction.pack(pady=5, fill=tk.X, expand=True)
     entry4 = tk.Entry(label_frame)
     entry4.pack(pady=5, fill=tk.X, expand=True)
 
     label5 = tk.Label(label_frame, text="* Camera Type/Code: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label5.pack(pady=5, fill=tk.X, expand=True)
-    cameraTypeInstructions = tk.Label(label_frame, text="(3CHIP/1080p/"+
+    camera_type_instructions = tk.Label(label_frame, text="(3CHIP/1080p/"+
         " PORT/HD/Canon/GoPro/etc.)\nExample: Canon HD",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    cameraTypeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    camera_type_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry5 = tk.Entry(label_frame)
     entry5.pack(pady=5, fill=tk.X, expand=True)
 
     label6 = tk.Label(label_frame, text="* Dive Start Date: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label6.pack(pady=5, fill=tk.X, expand=True)
-    startDateInstructions = tk.Label(label_frame, text="(YYMMDD)"+
+    start_date_instructions = tk.Label(label_frame, text="(YYMMDD)"+
         "\nExample: 20240610",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    startDateInstructions.pack(pady=5, fill=tk.X, expand=True)
+    start_date_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry6 = tk.Entry(label_frame)
     entry6.pack(pady=5, fill=tk.X, expand=True)
 
     label7 = tk.Label(label_frame, text="* Dive End Date: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label7.pack(pady=5, fill=tk.X, expand=True)
-    endDateInstructions = tk.Label(label_frame, text="(YYMMDD)"+
+    end_date_instructions = tk.Label(label_frame, text="(YYMMDD)"+
         "\nExample: 20240611",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    projectIdInstructions.pack(pady=5, fill=tk.X, expand=True)
+    end_date_instructions_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry7 = tk.Entry(label_frame)
     entry7.pack(pady=5, fill=tk.X, expand=True)
 
     label8 = tk.Label(label_frame, text="* Dive Start Time: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label8.pack(pady=5, fill=tk.X, expand=True)
-    startTimeInstructions = tk.Label(label_frame, text="(HHMMSS)"+
+    start_time_instructions = tk.Label(label_frame, text="(HHMMSS)"+
         "\nExample: 121500",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    startTimeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    start_time_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry8 = tk.Entry(label_frame)
     entry8.pack(pady=5, fill=tk.X, expand=True)
 
     label9 = tk.Label(label_frame, text="Dive End Time:",
         justify=tk.LEFT, anchor="w")
     label9.pack(pady=5, fill=tk.X, expand=True)
-    endTimeInstructions = tk.Label(label_frame, text="(HHMMSS)"+
+    end_time_instructions = tk.Label(label_frame, text="(HHMMSS)"+
         "\nExample: 204500",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    endTimeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    end_time_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry9 = tk.Entry(label_frame)
     entry9.pack(pady=5, fill=tk.X, expand=True)
 
     label10 = tk.Label(label_frame, text="Dive Duration:",
         justify=tk.LEFT, anchor="w")
     label10.pack(pady=5, fill=tk.X, expand=True)
-    endTimeInstructions = tk.Label(label_frame, text="(HH:MM:SS)"+
+    dive_duration_instructions = tk.Label(label_frame, text="(HH:MM:SS)"+
         "\nExample: 08:30:00",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    endTimeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    dive_duration_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry10 = tk.Entry(label_frame)
     entry10.pack(pady=5, fill=tk.X, expand=True)
 
     label11 = tk.Label(label_frame, text="Dive on Bottom Timestamp:",
         justify=tk.LEFT, anchor="w")
     label11.pack(pady=5, fill=tk.X, expand=True)
-    diveOnBottomInstructions = tk.Label(label_frame, text="(HHMMSS)"+
+    dive_on_bottom_instructions = tk.Label(label_frame, text="(HHMMSS)"+
         "\nExample: 130400",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    diveOnBottomInstructions.pack(pady=5, fill=tk.X, expand=True)
+    dive_on_bottom_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry11 = tk.Entry(label_frame)
     entry11.pack(pady=5, fill=tk.X, expand=True)
 
     label12 = tk.Label(label_frame, text="Dive Off Bottom Timestamp:",
         justify=tk.LEFT, anchor="w")
     label12.pack(pady=5, fill=tk.X, expand=True)
-    diveOffBottomInstructions = tk.Label(label_frame, text="(HHMMSS)"+
+    dive_off_bottom_instructions = tk.Label(label_frame, text="(HHMMSS)"+
         "\nExample: 195800",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    diveOffBottomInstructions.pack(pady=5, fill=tk.X, expand=True)
+    dive_off_bottom_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry12 = tk.Entry(label_frame)
     entry12.pack(pady=5, fill=tk.X, expand=True)
 
     label13 = tk.Label(label_frame, text="* Max Depth (m): *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label13.pack(pady=5, fill=tk.X, expand=True)
-    maxDepthInstructions = tk.Label(label_frame, text="(This should be a #.)"+
+    max_depth_instructions = tk.Label(label_frame, text="(This should be a #.)"+
         "\nExample: 50",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    maxDepthInstructions.pack(pady=5, fill=tk.X, expand=True)
+    max_depth_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry13 = tk.Entry(label_frame)
     entry13.pack(pady=5, fill=tk.X, expand=True)
 
     label14 = tk.Label(label_frame, text="Minimum Depth (m):",
         justify=tk.LEFT, anchor="w")
     label14.pack(pady=5, fill=tk.X, expand=True)
-    minDepthInstructions = tk.Label(label_frame, text="This should be a #."+
+    min_depth_instructions = tk.Label(label_frame, text="This should be a #."+
         "\nExample: Unknown",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    minDepthInstructions.pack(pady=5, fill=tk.X, expand=True)
+    min_depth_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry14 = tk.Entry(label_frame)
     entry14.pack(pady=5, fill=tk.X, expand=True)
 
     label15 = tk.Label(label_frame, text="* North Latitude: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label15.pack(pady=5, fill=tk.X, expand=True)
-    northLatitudeInstructions = tk.Label(label_frame, text="(Decimal"+
+    north_latitude_instructions = tk.Label(label_frame, text="(Decimal"+
         " Degrees.)\nExample: 17.7648",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    northLatitudeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    north_latitude_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry15 = tk.Entry(label_frame)
     entry15.pack(pady=5, fill=tk.X, expand=True)
 
     label16 = tk.Label(label_frame, text="* South Latitude: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label16.pack(pady=5, fill=tk.X, expand=True)
-    southLatitudeInstructions = tk.Label(label_frame, text="(Decimal"+
+    south_latitude_instructions = tk.Label(label_frame, text="(Decimal"+
         " Degrees.)\nExample: 17.7627",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    southLatitudeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    south_latitude_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry16 = tk.Entry(label_frame)
     entry16.pack(pady=5, fill=tk.X, expand=True)
 
     label17 = tk.Label(label_frame, text="* East Longitude: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label17.pack(pady=5, fill=tk.X, expand=True)
-    eastLongitudeInstructions = tk.Label(label_frame, text="(Decimal"+
+    east_longitude_instructions = tk.Label(label_frame, text="(Decimal"+
         " Degrees.)\nExample: -66.7518",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    eastLongitudeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    east_longitude_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry17 = tk.Entry(label_frame)
     entry17.pack(pady=5, fill=tk.X, expand=True)
 
     label18 = tk.Label(label_frame, text="* West Longitude: *",
         font=('Arial', 9, 'bold'), justify=tk.LEFT, anchor="w")
     label18.pack(pady=5, fill=tk.X, expand=True)
-    westLongitudeInstructions = tk.Label(label_frame, text="(Decimal"+
+    west_longitude_instructions = tk.Label(label_frame, text="(Decimal"+
         " Degrees.)\nExample: -66.7532",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    westLongitudeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    west_longitude_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry18 = tk.Entry(label_frame)
     entry18.pack(pady=5, fill=tk.X, expand=True)
 
     label19 = tk.Label(label_frame, text="* Project/Cruise Abstract: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label19.pack(pady=5, fill=tk.X, expand=True)
-    projectAbstractInstructions = tk.Label(label_frame, text="(Open Text)",
+    project_abstract_instructions = tk.Label(label_frame, text="(Open Text)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    projectAbstractInstructions.pack(pady=5, fill=tk.X, expand=True)
+    project_abstract_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry19 = tk.Entry(label_frame)
     entry19.pack(pady=5, fill=tk.X, expand=True)
 
     label20 = tk.Label(label_frame, text="* Dive Abstract: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label20.pack(pady=5, fill=tk.X, expand=True)
-    diveAbstractInstructions = tk.Label(label_frame, text="(Open Text)",
+    dive_abstract_instructions = tk.Label(label_frame, text="(Open Text)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    diveAbstractInstructions.pack(pady=5, fill=tk.X, expand=True)
+    dive_abstract_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry20 = tk.Entry(label_frame)
     entry20.pack(pady=5, fill=tk.X, expand=True)
 
     label21 = tk.Label(label_frame, text="* Dive Objectives: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label21.pack(pady=5, fill=tk.X, expand=True)
-    diveObjectivesInstructions = tk.Label(label_frame, text="(Open Text)",
+    dive_objectives_instructions = tk.Label(label_frame, text="(Open Text)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    diveObjectivesInstructions.pack(pady=5, fill=tk.X, expand=True)
+    dive_objectives_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry21 = tk.Entry(label_frame)
     entry21.pack(pady=5, fill=tk.X, expand=True)
 
     label22 = tk.Label(label_frame, text="* Dive Keywords: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label22.pack(pady=5, fill=tk.X, expand=True)
-    diveKeywordsInstructions = tk.Label(label_frame, text="(Text, Text,"+
+    dive_keywords_instructions = tk.Label(label_frame, text="(Text, Text,"+
         " Text)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    diveKeywordsInstructions.pack(pady=5, fill=tk.X, expand=True)
+    dive_keywords_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry22 = tk.Entry(label_frame)
     entry22.pack(pady=5, fill=tk.X, expand=True)
 
@@ -1039,9 +1039,9 @@ if __name__ == "__main__":
         text="* Underwater Cultural Heritage (UCH) Restrictions? *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label23.pack(pady=5, fill=tk.X, expand=True)
-    restrictionsInstructions = tk.Label(label_frame, text="(Yes/No)",
+    restrictions_instructions = tk.Label(label_frame, text="(Yes/No)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    restrictionsInstructions.pack(pady=5, fill=tk.X, expand=True)
+    restrictions_instructions.pack(pady=5, fill=tk.X, expand=True)
     entry23 = tk.Entry(label_frame)
     entry23.pack(pady=5, fill=tk.X, expand=True)
 
