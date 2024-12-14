@@ -37,18 +37,21 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 from tkinter import END
+from tkinter import filedialog
 import threading
 import datetime
 #from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 from moviepy.editor import VideoFileClip
 import ffmpeg
+import json
 
 # Use relative path to the ffmpeg executable as it's being bundled into an exe
 ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'ffmpeg.exe')
-
+ffprobe_path = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'ffprobe.exe')
+selected_files = []
 # Update the path to ffmpeg in the ffmpeg-python library
 ffmpeg._ffmpeg_exe = ffmpeg_path
-
+ffmpeg._ffprobe_exe = ffprobe_path
 
 def on_option_change(*args):
     """
@@ -79,7 +82,6 @@ def on_option_change(*args):
     print(f"Selected option: {selected_option}")
     return selected_option
 
-
 def video_operation():
     """
     Initiates the video splitting process based on user input.
@@ -109,31 +111,42 @@ def video_operation():
       thread to remain responsive.
 
     Notes:
-    - The `video_file_name_entry` should be a Tkinter entry widget where
+    - The `videoFileNameEntry` should be a Tkinter entry widget where
       the user inputs the path to the video file.
-    - The `chunk_length_entry` should be a Tkinter entry widget where the
+    - The `chunkLengthEntry` should be a Tkinter entry widget where the
       user specifies the segment length for the video chunks.
     - Ensure that `threading` is imported and used to run the video
       splitting operation in a separate thread to avoid blocking the main
       thread.
     """
-    video_file_path = video_file_name_entry.get()
-    video_file_path = video_file_path.replace('"','')
-    file_exists = os.path.isfile(video_file_path)
-    if not file_exists:
-        messagebox.showinfo("File not found",
-            "The file specified does not exist. Re-enter a file path")
-        return None
-    else:
-        segment_length = chunk_length_entry.get()
-        if len(segment_length)<1:
-            messagebox.showinfo("Missing Information",
-                "Enter the desired length for your video segments.")
+
+    video_file_path_string = videoFileNameEntry.get()
+    video_file_path_list = [item.strip() for item in video_file_path_string.split(',')]
+
+    file_name_update_string = updated_file_name_entry.get()
+    file_name_update_list = [item.strip() for item in file_name_update_string.split(',')]
+    i=0
+    file_name_dict = {}
+    for og_name in video_file_path_list:
+        temp_dict = {og_name:file_name_update_list[i]}
+        i+=1
+        file_name_dict.update(temp_dict)
+
+    for video_file_path in video_file_path_list:
+        file_exists = os.path.isfile(video_file_path)
+        if not file_exists:
+            messagebox.showerror("File not found",
+                "The file specified does not exist. Re-enter a file path")
             return None
         else:
-            threading.Thread(target=split_video, args=(video_file_path,
-            segment_length, update_progress)).start()
-
+            segment_length = chunkLengthEntry.get()
+            if len(segment_length)<1:
+                messagebox.showerror("Missing Information",
+                    "Enter the desired length for your video segments.")
+                return None
+            else:
+                threading.Thread(target=split_video, args=(video_file_path,
+                    segment_length, file_name_dict, update_progress)).start()
 
 def submit_data():
     """
@@ -193,11 +206,11 @@ def submit_data():
     field22_data = entry22.get()
     field23_data = entry23.get()
 
-    required_fields = [field1_data,field2_data,field3_data,field4_data,field5_data,
+    requiredFields = [field1_data,field2_data,field3_data,field4_data,field5_data,
         field6_data,field7_data,field8_data,field13_data,field15_data,field16_data,
         field17_data,field18_data,field19_data,field20_data,field21_data,field22_data,
         field23_data]
-    for myData in required_fields:
+    for myData in requiredFields:
         if len(str(myData))<1:
             messagebox.showinfo("Required Fields Incomplete",
             "Please fill in all required fields. These are bolded and marked"+
@@ -255,7 +268,6 @@ def submit_data():
     entry22.delete(0, tk.END)
     entry23.delete(0, tk.END)
 
-
 def video_upload():
     """
     Retrieves and displays statistics about the selected video file
@@ -289,7 +301,7 @@ def video_upload():
       - Recommended chunk size to achieve chunks smaller than 5 GB
 
     Notes:
-    - The `video_file_name_entry` is expected to be an entry widget where the user 
+    - The `videoFileNameEntry` is expected to be an entry widget where the user 
       provides the path to the video file.
     - The `video_information_box` is expected to be a text widget where the video 
       statistics are displayed.
@@ -298,23 +310,8 @@ def video_upload():
 
     """
 
-    video_file_path = video_file_name_entry.get()
-    video_file_path = video_file_path.replace('"','')
-    file_exists = os.path.isfile(video_file_path)
-    if not file_exists:
-        messagebox.showinfo("File not found",
-            "The file specified does not exist. Re-enter a file path")
-        return None
-
-    filename = video_file_path
-    clip = VideoFileClip(filename)
-    duration = clip.duration
-    duration_minutes = duration/60
-    file_size = get_file_size(filename)
-    size_per_minute = file_size/duration_minutes
-
     try:
-        desired_video_size = video_size_entry.get()
+        desired_video_size = videoSizeEntry.get()
         if len(desired_video_size)<1:
             desired_video_size = 5
         else:
@@ -325,21 +322,66 @@ def video_upload():
             "Currently using the default value of 5 GB.")
         desired_video_size = 5
 
-    ideal_chunk_size = (desired_video_size/size_per_minute) * 60
+    video_file_path_string = videoFileNameEntry.get()
+    video_file_path_list = [item.strip() for item in video_file_path_string.split(',')]
 
-    # The block below populates a text box with pertinent info for the user about their video file
-    video_information_box.delete('1.0',END)
-    video_information_box.insert('1.0', "Length of video (minutes): " + str(duration_minutes))
-    video_information_box.insert('2.0', "\nSize of video (GB): " + str(file_size) + " GB")
-    video_information_box.insert('3.0',
-        "\nSize per minute of video: " + str(size_per_minute) + " GB")
-    video_information_box.insert('4.0',"\n\n"+
-        "In order to receive video chunks smaller than "+ str(desired_video_size) +
-        " GB, specify that your chunks are less than " +
-        str(ideal_chunk_size) + " seconds long.")
+    for video_file_path in video_file_path_list:
+        #clean_video_file_path = video_file_path.replace('"','')
+        #video_file_path_list.replace(video_file_path, clean_video_file_path)
+        file_exists = os.path.isfile(str(video_file_path))
+        if not file_exists:
+            messagebox.showinfo("File not found",
+                "This file ("+str(video_file_path)+") does not exist. Re-enter a file path")
+            return None
+    messagebox.showinfo("Upload Information",
+            "Number of Videos Selected: " +str(len(selected_files))+
+            "\nFile List: " + str(selected_files))
+
+def calculate_ideal_chunk(input_file, desired_chunk_size):
+    chunk_dict = {}
+    # Calculate the average bitrate of the video in bits per second
+    #file_size = get_file_size(input_file)
+    file_stats = os.stat(input_file)
+    file_size = file_stats.st_size
+    clip = VideoFileClip(input_file)
+    duration = clip.duration
+    average_bitrate = (file_size * 8) / duration
+    print(f"Average bitrate of the video: {average_bitrate / (1024 ** 2):.2f} Mbps")
+    desired_size_bytes = desired_chunk_size * 1024 * 1024
+    desired_size_bits = desired_size_bytes * 8
+    # Convert bitrate from Mbps to bits per second
+    # Calculate the length of the segment in seconds
+    segment_length_seconds = desired_size_bits / average_bitrate
+    
+    total_frame_count = get_video_frame_count(input_file)
+    print("Total number of frames: ", total_frame_count)
+    total_chunks = int(duration // segment_length_seconds) + (1 if duration % segment_length_seconds > 0 else 0)
+    print(f"Total number of chunks: {total_chunks}")
+    chunk_size_frames = int(total_frame_count // total_chunks) if total_chunks > 0 else 0
+    print("Chunk size in frames: ", chunk_size_frames)
+
+    chunk_dict = {"chunk_frames":chunk_size_frames,"total_chunks":total_chunks}
+
+    return chunk_dict
+
+def get_video_frame_count(input_file):
+    # Run ffprobe to get the number of frames
+    command = [
+        ffprobe_path, '-v', 'error', '-select_streams', 'v:0',
+        '-count_frames', '-show_entries', 'stream=nb_read_frames',
+        '-of', 'default=noprint_wrappers=1', input_file
+    ]
+    
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode == 0:
+        # Extract the number of frames from the output string, splitting by '='
+        frame_count = result.stdout.strip().split('=')[1]  # Get the value after '='
+        return int(frame_count)
+    else:
+        raise Exception(f"Error in ffprobe: {result.stderr}")
 
 
-def split_video(filename, segment_length, progress_callback):
+def split_video(filename, segment_length, file_name_dict, progress_callback):
     """
     Splits a video file into segments of a specified length and optionally converts them to a
     different format.
@@ -376,7 +418,24 @@ def split_video(filename, segment_length, progress_callback):
       to run correctly. This uses a relative path and should just work out of the box as-is.
     """
 
-    file_name_update = updated_file_name_entry.get()
+    try:
+        desired_video_size = videoSizeEntry.get()
+        if len(desired_video_size)<1:
+            desired_video_size = 5
+        else:
+            desired_video_size = int(desired_video_size)
+    except:
+        messagebox.showinfo("Invalid Input",
+            "Please enter an integer value for desired video size(GB). "+
+            "Currently using the default value of 5 GB.")
+        desired_video_size = 5
+    target_size_bytes = desired_video_size * 1073741824
+
+    chunk_information = calculate_ideal_chunk(filename, desired_video_size)
+    chunk_size_frames = chunk_information.get("chunk_frames")
+    total_chunks = chunk_information.get("total_chunks")
+    
+    updated_file_name = file_name_dict.get(filename)
     dropdown_option = option_var.get()
     segment_length = int(segment_length)
     clip = VideoFileClip(filename)
@@ -394,10 +453,10 @@ def split_video(filename, segment_length, progress_callback):
         extension = os.path.basename(filename).split('.')[1]
     else:
         extension = "." + dropdown_option.lower()
-    total_segments = int(duration / segment_length) + 1
+    #total_segments = int(duration / segment_length) + 1
 
-    if len(file_name_update)>0:
-        basename = file_name_update
+    if updated_file_name is not None:
+        basename = updated_file_name
 
     if len(basename)<6:
         messagebox.showinfo("File not found",
@@ -410,9 +469,13 @@ def split_video(filename, segment_length, progress_callback):
             "Your file name should end with a date in this format: FILENAME_YYYYMMDD. Please enter a new file name in the appropriate section.")
         return None
 
-    messagebox.showinfo("Video Split",
-        "Video split operation started. Do not click the split video button again."+
-        " Progress bar will update shortly...")
+    file_path_list = list(file_name_dict.keys())
+    first_result = file_path_list[0]
+    #my_keyframes = get_keyframe_locations(filename)
+    if filename == first_result:
+        messagebox.showinfo("Video Split",
+            "Video split operation started. Do not click the split video button again."+
+            " Progress bar will update shortly...")
     while start_time < duration:
         print("START TIME LISTED AS: " + str(start_time))
         print("END TIME LISTED AS: " + str(end_time))
@@ -426,14 +489,26 @@ def split_video(filename, segment_length, progress_callback):
         print("Output listed as: " + str(output))
 
         if dropdown_option == "No Conversion":
+
             command = [
                 ffmpeg_path,
-                '-ss', str(start_time),
-                '-i', filename,
-                '-to', str(min(end_time, duration)),
-                '-c', 'copy',
-                output
+                '-i', filename,  # Input file
+                '-ss', str(start_time),  # Start time for the chunk in seconds
+                '-c:v', 'copy',    # Copy video codec (no re-encoding)
+                '-c:a', 'copy',    # Copy audio codec (no re-encoding)
+                '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
+                '-y',  # Overwrite output file if it exists
+                output  # Output file
             ]
+
+            #command = [
+            #    ffmpeg_path,
+            #    '-i', filename,
+            #    '-ss', str(start_time),
+            #    '-to', str(min(end_time, duration)),
+            #    '-c', 'copy',
+            #    output
+            #]
 
         elif dropdown_option == "MP4":
             output = output.replace('..','.')
@@ -443,9 +518,11 @@ def split_video(filename, segment_length, progress_callback):
                 ffmpeg_path,
                 '-ss', str(start_time),
                 '-i', filename,
-                '-to', str(min(end_time, duration)),
+                #'-to', str(min(end_time, duration)),
+                #"-fs", str(target_size_bytes),
                 '-c:v', vcodec,
                 '-c:a', acodec,
+                '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
                 '-strict', 'experimental',
                 output
             ]
@@ -458,30 +535,54 @@ def split_video(filename, segment_length, progress_callback):
                 ffmpeg_path,
                 '-ss', str(start_time),
                 '-i', filename,
-                '-to', str(min(end_time, duration)),
+                #'-to', str(min(end_time, duration)),
+                #"-fs", str(target_size_bytes),
                 '-c:v', vcodec,
                 '-c:a', acodec,
+                '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
                 '-strict', 'experimental',
                 output
-
             ]
 
         # Run the ffmpeg command
         subprocess.run(command, check=True)
+        chunk_clip = VideoFileClip(output)
+        chunk_duration = chunk_clip.duration
+        start_time += chunk_duration
 
-        start_time = end_time
-        end_time += segment_length
+        #end_time += segment_length
         i += 1
 
         # Update progress
-        progress = i - 1
-        progress_callback(progress / total_segments)
-        if progress == total_segments:
+        progress = i-1
+        progress_callback(progress / total_chunks)
+        if progress == total_chunks:
             progress = 0
             progress_callback(progress)
             messagebox.showinfo("Processing Complete",
             "Your video has been successfully processed.")
 
+def get_keyframe_locations(input_file):
+    # Run ffprobe to get keyframe timestamps
+    command = [
+        ffprobe_path, '-v', 'error', '-select_streams', 'v:0', 
+        '-show_frames', '-show_entries', 'frame=pkt_pts_time,key_frame', 
+        '-of', 'csv=p=0', input_file
+    ]
+    
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode == 0:
+        keyframe_locations = []
+        # Process the output to get keyframe timestamps
+        for line in result.stdout.strip().splitlines():
+            fields = line.split(',')
+            timestamp = float(fields[0])  # Timestamp of the frame
+            is_keyframe = int(fields[1])  # 1 if keyframe, 0 if not
+            if is_keyframe == 1:
+                keyframe_locations.append(timestamp)
+        return keyframe_locations
+    else:
+        raise Exception(f"Error in ffprobe: {result.stderr}")
 
 def update_progress(progress):
     """
@@ -489,7 +590,6 @@ def update_progress(progress):
     """
     progress_bar['value'] = progress * 100
     page2.update_idletasks()
-
 
 def get_file_size(file_name):
     """
@@ -518,7 +618,6 @@ def get_file_size(file_name):
     file_stats = os.stat(file_name)
     file_size = file_stats.st_size / (1024 * 1024 * 1024)
     return file_size
-
 
 def create_page_content(my_page):
     """
@@ -566,10 +665,11 @@ def create_page_content(my_page):
     top_description3.pack(pady=5, fill=tk.X, expand=True)
 
     # Top description 4
-    top_description4 = tk.Label(top_frame, text="1. Enter the path to your video file and click "+
-        "submit video to get video information and processing suggestions. \n2. Decide how to "+
-        "split the video based on entered parameters. \n3. Enter any corresponding metadata for"+
-        " your video and generate a metadata spreadsheet.",
+    top_description4 = tk.Label(top_frame, text="1. Enter the path to your video files (separated "+
+        "by commas), or use the browse function to select any number of local files. Click "+
+        "submit video to begin the process. \n2. Decide how to split the videos based on entered "+
+        "parameters. \n3. Enter any corresponding metadata for your video and generate a metadata "+
+        "spreadsheet.",
         justify=tk.LEFT, font=('Arial', 10))
     top_description4.bind('<Configure>',
         lambda e: top_description4.config(wraplength=top_description4.winfo_width()))
@@ -578,6 +678,30 @@ def create_page_content(my_page):
     # Separator (Bar)
     separator = ttk.Separator(my_page, orient='horizontal')
     separator.pack(fill=tk.X, padx=10, pady=10)
+
+def select_files():
+    global selected_files
+    selected_files = []
+    # Create a Tkinter root window (hidden)
+    root = tk.Tk()
+    root.withdraw()  # Hide the root window
+
+    # Open the file dialog to select files
+    file_paths = filedialog.askopenfilenames(title="Select Files")
+
+    # Print or process the selected files
+    if file_paths:
+        file_string = ""
+        for file in file_paths:
+            print(file)
+            selected_files.append(file)
+            file_string += str(file) + ','  # Build the string with files
+
+# Insert the concatenated string into the Entry widget
+        videoFileNameEntry.delete(0, tk.END)  # Clear any existing text
+        videoFileNameEntry.insert(0, file_string.strip(','))
+    else:
+        print("No files selected.")
 
 if __name__ == "__main__":
 
@@ -619,12 +743,14 @@ if __name__ == "__main__":
     page3 = ttk.Frame(notebook)
     notebook.add(page3, text="Generate Metadata")
 
+    pageList = [page1,page2,page3]
+
     app.geometry("600x700")
-    page_list = [page1,page2,page3]
-    for page in page_list:
+
+    for page in pageList:
         create_page_content(page)
 
-    # PAGE 1 CONTENT STARTS HERE
+    ############################# PAGE 1 CONTENT STARTS HERE #################################
     bottom_frame = tk.Frame(page1)
     bottom_frame.pack(fill=tk.X, padx=10, pady=10)
 
@@ -637,87 +763,94 @@ if __name__ == "__main__":
     test_label = tk.Label(label_frame, text = 'Enter Video Information', font=('Arial', 12, 'bold'))
     test_label.pack(expand = True)
 
-    video_file_name = tk.Label(label_frame, text="Video File Path:",
+    videoFileName = tk.Label(label_frame, text="Video File Path:",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    video_file_name.pack(pady=5, fill=tk.X, expand=True)
-    video_file_name_instructions = tk.Label(label_frame,
+    videoFileName.pack(pady=5, fill=tk.X, expand=True)
+    videoFileNameInstructions = tk.Label(label_frame,
         text="If this video is in your working directory, just enter the filename. Be sure to "+
         "include the extension (.mov or .mp4). Get the full file path by finding the file in "+
         "file explorer, right clicking it and selecting 'properties.'",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    video_file_name_instructions.bind('<Configure>',
-        lambda e: video_file_name_instructions.config(wraplength=video_file_name_instructions.winfo_width()))
-    video_file_name_instructions.pack(pady=5, fill=tk.X, expand=True)
-    video_file_name_entry = tk.Entry(label_frame)
-    video_file_name_entry.pack(pady=5, fill=tk.X, expand=True)
+    videoFileNameInstructions.bind('<Configure>',
+        lambda e: videoFileNameInstructions.config(wraplength=videoFileNameInstructions.winfo_width()))
+    videoFileNameInstructions.pack(pady=5, fill=tk.X, expand=True)
+    videoFileNameEntry = tk.Entry(label_frame)
+    videoFileNameEntry.pack(pady=5, fill=tk.X, expand=True)
 
-    video_size_label = tk.Label(label_frame, text="Desired Video Segment Size (GB):",
+    # Create a browse button
+    browse_button = tk.Button(label_frame, text="Browse Files",
+        command=select_files, bg="lightGrey", fg="black")
+    browse_button.pack(pady=20)
+
+    videoSizeLabel = tk.Label(label_frame, text="Desired Video Segment Size (GB):",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    video_size_label.pack(pady=5, fill=tk.X, expand=True)
-    video_size_instructions = tk.Label(label_frame,
+    videoSizeLabel.pack(pady=5, fill=tk.X, expand=True)
+    videoSizeInstructions = tk.Label(label_frame,
         text="Enter the maximum video segment size in GB",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    video_size_instructions.bind('<Configure>',
-        lambda e: video_size_instructions.config(wraplength=video_size_instructions.winfo_width()))
-    video_size_instructions.pack(pady=5, fill=tk.X, expand=True)
-    video_size_entry = tk.Entry(label_frame)
-    video_size_entry.pack(pady=5, fill=tk.X, expand=True)
+    videoSizeInstructions.bind('<Configure>',
+        lambda e: videoSizeInstructions.config(wraplength=videoSizeInstructions.winfo_width()))
+    videoSizeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    videoSizeEntry = tk.Entry(label_frame)
+    videoSizeEntry.pack(pady=5, fill=tk.X, expand=True)
 
-    video_information_box = tk.Text(bottom_frame,height=6)
-    video_information_box.pack(pady=5,fill=tk.X, expand =True)
-    video_information_box.delete('1.0',END)
-    video_information_box.insert('1.0',
-        "Video information and processing suggestions will be displayed here after clicking the "+
-        "upload button below.")
+    #video_information_box = tk.Text(bottom_frame,height=6)
+    #video_information_box.pack(pady=5,fill=tk.X, expand =True)
+    #video_information_box.delete('1.0',END)
+    #video_information_box.insert('1.0',
+    #    "Video information and processing suggestions will be displayed here after clicking the "+
+    #    "upload button below.")
 
     # Create a submit button
     submit_button = tk.Button(bottom_frame, text="Upload Video",
         command=video_upload, bg="lightGrey", fg="black")
     submit_button.pack(pady=20)
 
-    # PAGE 2 CONTENT STARTS HERE
+ ################### PAGE 2 CONTENT STARTS HERE ###################
+
     page2_bottom_frame = tk.Frame(page2)
     page2_bottom_frame.pack(fill=tk.X, padx=10, pady=10)
 
     # Create a frame for the label of the required dimension at the required place
     page2_label_frame = tk.Frame(page2_bottom_frame, width = 200, height = 20)
     page2_label_frame.pack(fill=tk.X,padx=5,pady=5)
+    #label_frame.place(x = 60, y = 100)
 
     # Create the label and pack it to fill the whole frame (default anchor is Centre)
     page2_test_label = tk.Label(page2_label_frame, text = 'Enter Chunking Parameters',
         font=('Arial', 12, 'bold'))
     page2_test_label.pack(expand = True)
 
-    updated_file_name = tk.Label(page2_label_frame, text="Updated Video Name (if applicable): ",
+    updatedFileName = tk.Label(page2_label_frame, text="Updated Video Name (if applicable): ",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    updated_file_name.pack(pady=5, fill=tk.X, expand=True)
-    updated_file_name_instructions = tk.Label(page2_label_frame, text="If your file name does not"+
+    updatedFileName.pack(pady=5, fill=tk.X, expand=True)
+    updatedFileNameInstructions = tk.Label(page2_label_frame, text="If your file name does not"+
         " include the start date, enter a new filename that follows this convention: "+
-        " FILENAME_YYYYMMDD (Example: Dive0982_20240916)",
+        " FILENAME_YYYYMMDD (Example: Dive0982_20240916). For multiple files, separate with commas.",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    updated_file_name_instructions.bind('<Configure>',
-        lambda e: updated_file_name_instructions.config(wraplength=updated_file_name_instructions.winfo_width()))
-    updated_file_name_instructions.pack(pady=5, fill=tk.X, expand=True)
+    updatedFileNameInstructions.bind('<Configure>',
+        lambda e: updatedFileNameInstructions.config(wraplength=updatedFileNameInstructions.winfo_width()))
+    updatedFileNameInstructions.pack(pady=5, fill=tk.X, expand=True)
     updated_file_name_entry = tk.Entry(page2_label_frame)
     updated_file_name_entry.pack(pady=5, fill=tk.X, expand=True)
 
-    chunk_length = tk.Label(page2_label_frame, text="Desired length of video chunks (in seconds): ",
+    chunkLength = tk.Label(page2_label_frame, text="Desired length of video chunks (in seconds): ",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    chunk_length.pack(pady=5, fill=tk.X, expand=True)
-    chunk_length_instructions = tk.Label(page2_label_frame,
+    chunkLength.pack(pady=5, fill=tk.X, expand=True)
+    chunkLengthInstructions = tk.Label(page2_label_frame,
         text="Enter the length (in seconds) that you would like each video chunk to be. Note that"+
         " the last chunk may be shorter than the rest.",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    chunk_length_instructions.bind('<Configure>',
-        lambda e: chunk_length_instructions.config(wraplength=chunk_length_instructions.winfo_width()))
-    chunk_length_instructions.pack(pady=5, fill=tk.X, expand=True)
-    chunk_length_entry = tk.Entry(page2_label_frame)
-    chunk_length_entry.pack(pady=5, fill=tk.X, expand=True)
+    chunkLengthInstructions.bind('<Configure>',
+        lambda e: chunkLengthInstructions.config(wraplength=chunkLengthInstructions.winfo_width()))
+    chunkLengthInstructions.pack(pady=5, fill=tk.X, expand=True)
+    chunkLengthEntry = tk.Entry(page2_label_frame)
+    chunkLengthEntry.pack(pady=5, fill=tk.X, expand=True)
 
-    dropdown_label = tk.Label(page2_label_frame,
+    dropdownLabel = tk.Label(page2_label_frame,
         text="If you want to convert your output files, select a new file type:",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    dropdown_label.pack(pady=5, fill=tk.X, expand=True)
+    dropdownLabel.pack(pady=5, fill=tk.X, expand=True)
     # Set options for video conversion dropdown list
     options = ["No Conversion", "MP4", "MOV"]
 
@@ -740,7 +873,8 @@ if __name__ == "__main__":
         command=video_operation, bg="lightGrey", fg="black")
     split_video_button.pack(pady=20)
 
-    # PAGE 3 STARTS HERE
+    ############################### PAGE 3 STARTS HERE #############################
+
     # Create a frame that will contain the canvas and the scrollbar
     outer_frame = tk.Frame(page3)
     outer_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -821,217 +955,217 @@ if __name__ == "__main__":
     label1 = tk.Label(label_frame, text="* Project ID (or CruiseID): *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label1.pack(pady=5, fill=tk.X, expand=True)
-    project_id_instructions = tk.Label(label_frame, text="(Use ID assigned"+
+    projectIdInstructions = tk.Label(label_frame, text="(Use ID assigned"+
         " by cruise or NOAA Ocean Exploration.)\nExample: NF2202",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    project_id_instructions.pack(pady=5, fill=tk.X, expand=True)
+    projectIdInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry1 = tk.Entry(label_frame)
     entry1.pack(pady=5, fill=tk.X, expand=True)
 
     label2 = tk.Label(label_frame, text="* DiveID: *", font=('Arial', 9, 'bold'),
         justify=tk.LEFT, anchor="w")
     label2.pack(pady=5, fill=tk.X, expand=True)
-    dive_id_instructions = tk.Label(label_frame, text="(Open character.)"+
+    diveIdInstructions = tk.Label(label_frame, text="(Open character.)"+
         "\nExamples: D01, D001, GE01, AL4039",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    dive_id_instructions.pack(pady=5, fill=tk.X, expand=True)
+    diveIdInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry2 = tk.Entry(label_frame)
     entry2.pack(pady=5, fill=tk.X, expand=True)
 
     label3 = tk.Label(label_frame, text="* Dive Site Name: *", 
         font=('Arial', 9, 'bold'), justify=tk.LEFT, anchor="w")
     label3.pack(pady=5, fill=tk.X, expand=True)
-    dive_site_name_instructions = tk.Label(label_frame, text="(Open Text.)"+
+    diveSiteNameInstructions = tk.Label(label_frame, text="(Open Text.)"+
         "\nExample: Guayanilla Canyon",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    dive_site_name_instructions.pack(pady=5, fill=tk.X, expand=True)
+    diveSiteNameInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry3 = tk.Entry(label_frame)
     entry3.pack(pady=5, fill=tk.X, expand=True)
 
     label4 = tk.Label(label_frame, text="* Collecting Platform Name: *",
         font=('Arial', 9, 'bold'), justify=tk.LEFT, anchor="w")
     label4.pack(pady=5, fill=tk.X, expand=True)
-    platform_instruction = tk.Label(label_frame, text="(Open Text."+
+    platformInstructions = tk.Label(label_frame, text="(Open Text."+
         " Include platform type.)\nExample: Global Explorer ROV",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    platform_instruction.pack(pady=5, fill=tk.X, expand=True)
+    platformInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry4 = tk.Entry(label_frame)
     entry4.pack(pady=5, fill=tk.X, expand=True)
 
     label5 = tk.Label(label_frame, text="* Camera Type/Code: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label5.pack(pady=5, fill=tk.X, expand=True)
-    camera_type_instructions = tk.Label(label_frame, text="(3CHIP/1080p/"+
+    cameraTypeInstructions = tk.Label(label_frame, text="(3CHIP/1080p/"+
         " PORT/HD/Canon/GoPro/etc.)\nExample: Canon HD",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    camera_type_instructions.pack(pady=5, fill=tk.X, expand=True)
+    cameraTypeInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry5 = tk.Entry(label_frame)
     entry5.pack(pady=5, fill=tk.X, expand=True)
 
     label6 = tk.Label(label_frame, text="* Dive Start Date: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label6.pack(pady=5, fill=tk.X, expand=True)
-    start_date_instructions = tk.Label(label_frame, text="(YYMMDD)"+
+    startDateInstructions = tk.Label(label_frame, text="(YYMMDD)"+
         "\nExample: 20240610",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    start_date_instructions.pack(pady=5, fill=tk.X, expand=True)
+    startDateInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry6 = tk.Entry(label_frame)
     entry6.pack(pady=5, fill=tk.X, expand=True)
 
     label7 = tk.Label(label_frame, text="* Dive End Date: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label7.pack(pady=5, fill=tk.X, expand=True)
-    end_date_instructions = tk.Label(label_frame, text="(YYMMDD)"+
+    endDateInstructions = tk.Label(label_frame, text="(YYMMDD)"+
         "\nExample: 20240611",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    end_date_instructions_instructions.pack(pady=5, fill=tk.X, expand=True)
+    projectIdInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry7 = tk.Entry(label_frame)
     entry7.pack(pady=5, fill=tk.X, expand=True)
 
     label8 = tk.Label(label_frame, text="* Dive Start Time: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label8.pack(pady=5, fill=tk.X, expand=True)
-    start_time_instructions = tk.Label(label_frame, text="(HHMMSS)"+
+    startTimeInstructions = tk.Label(label_frame, text="(HHMMSS)"+
         "\nExample: 121500",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    start_time_instructions.pack(pady=5, fill=tk.X, expand=True)
+    startTimeInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry8 = tk.Entry(label_frame)
     entry8.pack(pady=5, fill=tk.X, expand=True)
 
     label9 = tk.Label(label_frame, text="Dive End Time:",
         justify=tk.LEFT, anchor="w")
     label9.pack(pady=5, fill=tk.X, expand=True)
-    end_time_instructions = tk.Label(label_frame, text="(HHMMSS)"+
+    endTimeInstructions = tk.Label(label_frame, text="(HHMMSS)"+
         "\nExample: 204500",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    end_time_instructions.pack(pady=5, fill=tk.X, expand=True)
+    endTimeInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry9 = tk.Entry(label_frame)
     entry9.pack(pady=5, fill=tk.X, expand=True)
 
     label10 = tk.Label(label_frame, text="Dive Duration:",
         justify=tk.LEFT, anchor="w")
     label10.pack(pady=5, fill=tk.X, expand=True)
-    dive_duration_instructions = tk.Label(label_frame, text="(HH:MM:SS)"+
+    endTimeInstructions = tk.Label(label_frame, text="(HH:MM:SS)"+
         "\nExample: 08:30:00",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    dive_duration_instructions.pack(pady=5, fill=tk.X, expand=True)
+    endTimeInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry10 = tk.Entry(label_frame)
     entry10.pack(pady=5, fill=tk.X, expand=True)
 
     label11 = tk.Label(label_frame, text="Dive on Bottom Timestamp:",
         justify=tk.LEFT, anchor="w")
     label11.pack(pady=5, fill=tk.X, expand=True)
-    dive_on_bottom_instructions = tk.Label(label_frame, text="(HHMMSS)"+
+    diveOnBottomInstructions = tk.Label(label_frame, text="(HHMMSS)"+
         "\nExample: 130400",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    dive_on_bottom_instructions.pack(pady=5, fill=tk.X, expand=True)
+    diveOnBottomInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry11 = tk.Entry(label_frame)
     entry11.pack(pady=5, fill=tk.X, expand=True)
 
     label12 = tk.Label(label_frame, text="Dive Off Bottom Timestamp:",
         justify=tk.LEFT, anchor="w")
     label12.pack(pady=5, fill=tk.X, expand=True)
-    dive_off_bottom_instructions = tk.Label(label_frame, text="(HHMMSS)"+
+    diveOffBottomInstructions = tk.Label(label_frame, text="(HHMMSS)"+
         "\nExample: 195800",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    dive_off_bottom_instructions.pack(pady=5, fill=tk.X, expand=True)
+    diveOffBottomInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry12 = tk.Entry(label_frame)
     entry12.pack(pady=5, fill=tk.X, expand=True)
 
     label13 = tk.Label(label_frame, text="* Max Depth (m): *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label13.pack(pady=5, fill=tk.X, expand=True)
-    max_depth_instructions = tk.Label(label_frame, text="(This should be a #.)"+
+    maxDepthInstructions = tk.Label(label_frame, text="(This should be a #.)"+
         "\nExample: 50",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    max_depth_instructions.pack(pady=5, fill=tk.X, expand=True)
+    maxDepthInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry13 = tk.Entry(label_frame)
     entry13.pack(pady=5, fill=tk.X, expand=True)
 
     label14 = tk.Label(label_frame, text="Minimum Depth (m):",
         justify=tk.LEFT, anchor="w")
     label14.pack(pady=5, fill=tk.X, expand=True)
-    min_depth_instructions = tk.Label(label_frame, text="This should be a #."+
+    minDepthInstructions = tk.Label(label_frame, text="This should be a #."+
         "\nExample: Unknown",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    min_depth_instructions.pack(pady=5, fill=tk.X, expand=True)
+    minDepthInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry14 = tk.Entry(label_frame)
     entry14.pack(pady=5, fill=tk.X, expand=True)
 
     label15 = tk.Label(label_frame, text="* North Latitude: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label15.pack(pady=5, fill=tk.X, expand=True)
-    north_latitude_instructions = tk.Label(label_frame, text="(Decimal"+
+    northLatitudeInstructions = tk.Label(label_frame, text="(Decimal"+
         " Degrees.)\nExample: 17.7648",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    north_latitude_instructions.pack(pady=5, fill=tk.X, expand=True)
+    northLatitudeInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry15 = tk.Entry(label_frame)
     entry15.pack(pady=5, fill=tk.X, expand=True)
 
     label16 = tk.Label(label_frame, text="* South Latitude: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label16.pack(pady=5, fill=tk.X, expand=True)
-    south_latitude_instructions = tk.Label(label_frame, text="(Decimal"+
+    southLatitudeInstructions = tk.Label(label_frame, text="(Decimal"+
         " Degrees.)\nExample: 17.7627",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    south_latitude_instructions.pack(pady=5, fill=tk.X, expand=True)
+    southLatitudeInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry16 = tk.Entry(label_frame)
     entry16.pack(pady=5, fill=tk.X, expand=True)
 
     label17 = tk.Label(label_frame, text="* East Longitude: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label17.pack(pady=5, fill=tk.X, expand=True)
-    east_longitude_instructions = tk.Label(label_frame, text="(Decimal"+
+    eastLongitudeInstructions = tk.Label(label_frame, text="(Decimal"+
         " Degrees.)\nExample: -66.7518",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    east_longitude_instructions.pack(pady=5, fill=tk.X, expand=True)
+    eastLongitudeInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry17 = tk.Entry(label_frame)
     entry17.pack(pady=5, fill=tk.X, expand=True)
 
     label18 = tk.Label(label_frame, text="* West Longitude: *",
         font=('Arial', 9, 'bold'), justify=tk.LEFT, anchor="w")
     label18.pack(pady=5, fill=tk.X, expand=True)
-    west_longitude_instructions = tk.Label(label_frame, text="(Decimal"+
+    westLongitudeInstructions = tk.Label(label_frame, text="(Decimal"+
         " Degrees.)\nExample: -66.7532",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    west_longitude_instructions.pack(pady=5, fill=tk.X, expand=True)
+    westLongitudeInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry18 = tk.Entry(label_frame)
     entry18.pack(pady=5, fill=tk.X, expand=True)
 
     label19 = tk.Label(label_frame, text="* Project/Cruise Abstract: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label19.pack(pady=5, fill=tk.X, expand=True)
-    project_abstract_instructions = tk.Label(label_frame, text="(Open Text)",
+    projectAbstractInstructions = tk.Label(label_frame, text="(Open Text)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    project_abstract_instructions.pack(pady=5, fill=tk.X, expand=True)
+    projectAbstractInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry19 = tk.Entry(label_frame)
     entry19.pack(pady=5, fill=tk.X, expand=True)
 
     label20 = tk.Label(label_frame, text="* Dive Abstract: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label20.pack(pady=5, fill=tk.X, expand=True)
-    dive_abstract_instructions = tk.Label(label_frame, text="(Open Text)",
+    diveAbstractInstructions = tk.Label(label_frame, text="(Open Text)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    dive_abstract_instructions.pack(pady=5, fill=tk.X, expand=True)
+    diveAbstractInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry20 = tk.Entry(label_frame)
     entry20.pack(pady=5, fill=tk.X, expand=True)
 
     label21 = tk.Label(label_frame, text="* Dive Objectives: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label21.pack(pady=5, fill=tk.X, expand=True)
-    dive_objectives_instructions = tk.Label(label_frame, text="(Open Text)",
+    diveObjectivesInstructions = tk.Label(label_frame, text="(Open Text)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    dive_objectives_instructions.pack(pady=5, fill=tk.X, expand=True)
+    diveObjectivesInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry21 = tk.Entry(label_frame)
     entry21.pack(pady=5, fill=tk.X, expand=True)
 
     label22 = tk.Label(label_frame, text="* Dive Keywords: *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label22.pack(pady=5, fill=tk.X, expand=True)
-    dive_keywords_instructions = tk.Label(label_frame, text="(Text, Text,"+
+    diveKeywordsInstructions = tk.Label(label_frame, text="(Text, Text,"+
         " Text)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    dive_keywords_instructions.pack(pady=5, fill=tk.X, expand=True)
+    diveKeywordsInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry22 = tk.Entry(label_frame)
     entry22.pack(pady=5, fill=tk.X, expand=True)
 
@@ -1039,9 +1173,9 @@ if __name__ == "__main__":
         text="* Underwater Cultural Heritage (UCH) Restrictions? *",
         font=('Arial', 9, 'bold'),justify=tk.LEFT, anchor="w")
     label23.pack(pady=5, fill=tk.X, expand=True)
-    restrictions_instructions = tk.Label(label_frame, text="(Yes/No)",
+    restrictionsInstructions = tk.Label(label_frame, text="(Yes/No)",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    restrictions_instructions.pack(pady=5, fill=tk.X, expand=True)
+    restrictionsInstructions.pack(pady=5, fill=tk.X, expand=True)
     entry23 = tk.Entry(label_frame)
     entry23.pack(pady=5, fill=tk.X, expand=True)
 
