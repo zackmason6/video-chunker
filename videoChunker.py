@@ -125,14 +125,19 @@ def video_operation():
 
     file_name_update_string = updated_file_name_entry.get()
     file_name_update_list = [item.strip() for item in file_name_update_string.split(',')]
+    
     i=0
     file_name_dict = {}
-    for og_name in video_file_path_list:
-        temp_dict = {og_name:file_name_update_list[i]}
+    for video_file_path in video_file_path_list:
+        try:
+            temp_dict = {video_file_path:file_name_update_list[i]}
+        except:
+            temp_dict = {video_file_path:video_file_path}
         i+=1
         file_name_dict.update(temp_dict)
 
     for video_file_path in video_file_path_list:
+        print("Looking for this: " + video_file_path)
         file_exists = os.path.isfile(video_file_path)
         if not file_exists:
             messagebox.showerror("File not found",
@@ -140,13 +145,13 @@ def video_operation():
             return None
         else:
             segment_length = chunkLengthEntry.get()
-            if len(segment_length)<1:
-                messagebox.showerror("Missing Information",
-                    "Enter the desired length for your video segments.")
-                return None
-            else:
-                threading.Thread(target=split_video, args=(video_file_path,
-                    segment_length, file_name_dict, update_progress)).start()
+            #if len(segment_length)<1:
+            #    messagebox.showerror("Missing Information",
+            #        "Enter the desired length for your video segments.")
+            #    return None
+            #else:
+            threading.Thread(target=split_video, args=(video_file_path,
+                segment_length, file_name_dict, update_progress)).start()
 
 def submit_data():
     """
@@ -212,7 +217,7 @@ def submit_data():
         field23_data]
     for myData in requiredFields:
         if len(str(myData))<1:
-            messagebox.showinfo("Required Fields Incomplete",
+            messagebox.showerror("Required Fields Incomplete",
             "Please fill in all required fields. These are bolded and marked"+
             " with asterisks.")
             return None
@@ -330,11 +335,10 @@ def video_upload():
         #video_file_path_list.replace(video_file_path, clean_video_file_path)
         file_exists = os.path.isfile(str(video_file_path))
         if not file_exists:
-            messagebox.showinfo("File not found",
+            messagebox.showerror("File not found",
                 "This file ("+str(video_file_path)+") does not exist. Re-enter a file path")
             return None
-    messagebox.showinfo("Upload Information",
-            "Number of Videos Selected: " +str(len(selected_files))+
+    show_info_non_blocking("Number of Videos Selected: " +str(len(selected_files))+
             "\nFile List: " + str(selected_files))
 
 def calculate_ideal_chunk(input_file, desired_chunk_size):
@@ -417,37 +421,39 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
     - The `ffmpeg_path` variable must be defined and point to the ffmpeg executable for the command 
       to run correctly. This uses a relative path and should just work out of the box as-is.
     """
+    
+    file_path_list = list(file_name_dict.keys())
+    first_result = file_path_list[0]
+    #my_keyframes = get_keyframe_locations(filename)
+    if filename == first_result:
+        show_info_non_blocking("Video split operation started. Do not click the split video button again."+
+            " Progress bar will update shortly...")
+    
+    video_file_path_string = videoFileNameEntry.get()
+    video_file_path_list = [item.strip() for item in video_file_path_string.split(',')]
+
+    for video_file_path in video_file_path_list:
+        file_exists = os.path.isfile(str(video_file_path))
+        if not file_exists:
+            messagebox.showerror("File not found",
+                "This file ("+str(video_file_path)+") does not exist. Re-enter a file path")
+            return None
 
     try:
         desired_video_size = videoSizeEntry.get()
         if len(desired_video_size)<1:
-            desired_video_size = 5
+            messagebox.showerror("Invalid Input",
+                "Please enter an integer value for estimated video size(GB).")
+            return None
         else:
             desired_video_size = int(desired_video_size)
     except:
-        messagebox.showinfo("Invalid Input",
-            "Please enter an integer value for desired video size(GB). "+
-            "Currently using the default value of 5 GB.")
-        desired_video_size = 5
-    target_size_bytes = desired_video_size * 1073741824
+        messagebox.showerror("Invalid Input",
+            "Please enter an integer value for estimated video size(GB).")
+        return None
 
-    chunk_information = calculate_ideal_chunk(filename, desired_video_size)
-    chunk_size_frames = chunk_information.get("chunk_frames")
-    total_chunks = chunk_information.get("total_chunks")
-    
     updated_file_name = file_name_dict.get(filename)
     dropdown_option = option_var.get()
-    segment_length = int(segment_length)
-    clip = VideoFileClip(filename)
-    duration = clip.duration
-    print("Segment length read as: " + str(segment_length))
-    print("Filename read as: " + str(filename))
-    print("Duration read as: " + str(duration))
-
-    start_time = 0
-    end_time = segment_length
-    i = 1
-
     basename = os.path.basename(filename).split('.')[0]
     if dropdown_option == "No Conversion":
         extension = os.path.basename(filename).split('.')[1]
@@ -459,30 +465,40 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
         basename = updated_file_name
 
     if len(basename)<6:
-        messagebox.showinfo("File not found",
-            "The file specified does not exist. Re-enter a file path")
+        messagebox.showerror("File Naming Convention",
+            "The file name specified does not match the Descriptor_YYYMMDD naming convention. Re-enter a file path.")
         return None
     
     basename_date_check = basename[-8:]
     if basename_date_check.isdigit() == False:
-        messagebox.showinfo("Bad File Name Format",
+        messagebox.showerror("Bad File Name Format",
             "Your file name should end with a date in this format: FILENAME_YYYYMMDD. Please enter a new file name in the appropriate section.")
         return None
 
-    file_path_list = list(file_name_dict.keys())
-    first_result = file_path_list[0]
-    #my_keyframes = get_keyframe_locations(filename)
-    if filename == first_result:
-        messagebox.showinfo("Video Split",
-            "Video split operation started. Do not click the split video button again."+
-            " Progress bar will update shortly...")
+    target_size_bytes = desired_video_size * 1073741824
+
+    chunk_information = calculate_ideal_chunk(filename, desired_video_size)
+    chunk_size_frames = chunk_information.get("chunk_frames")
+    total_chunks = chunk_information.get("total_chunks")
+    if len(segment_length)>=1:
+        segment_length = int(segment_length)
+        print("Segment length read as: " + str(segment_length))
+        end_time = segment_length
+    clip = VideoFileClip(filename)
+    duration = clip.duration
+    print("Filename read as: " + str(filename))
+    print("Duration read as: " + str(duration))
+    start_time = 0
+    i = 1
+
     while start_time < duration:
         print("START TIME LISTED AS: " + str(start_time))
-        print("END TIME LISTED AS: " + str(end_time))
-        start_time_converted = str(datetime.timedelta(seconds = start_time))
+        #print("END TIME LISTED AS: " + str(end_time))
+        start_time_converted = str(datetime.timedelta(seconds = round(start_time)))
         start_time_converted = start_time_converted.replace(":","")
-        end_time_converted = str(datetime.timedelta(seconds = end_time))
-        end_time_converted = end_time_converted.replace(":","")
+        if len(segment_length)>=1:
+            end_time_converted = str(datetime.timedelta(seconds = end_time))
+            end_time_converted = end_time_converted.replace(":","")
         #output = os.path.join(f"{basename}_part{i}."+str(extension))
         output = os.path.join(f"{basename}T{start_time_converted}Z."+
             str(extension))
@@ -498,7 +514,7 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
                 '-c:a', 'copy',    # Copy audio codec (no re-encoding)
                 '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
                 '-y',  # Overwrite output file if it exists
-                output  # Output file
+                #output  # Output file
             ]
 
             #command = [
@@ -524,7 +540,6 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
                 '-c:a', acodec,
                 '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
                 '-strict', 'experimental',
-                output
             ]
 
         elif dropdown_option == "MOV":
@@ -541,14 +556,24 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
                 '-c:a', acodec,
                 '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
                 '-strict', 'experimental',
-                output
             ]
+        # If end_time is provided, add the -to option to the command
+        if len(segment_length)>=1:
+            if start_time <1:
+                command.extend(['-to', str(segment_length)])  # Optional end time for the chunk
+            else:
+                command.extend(['-to', str(end_time)])  # Optional end time for the chunk
+
+        # Add the output file at the end
+        command.append(output)
 
         # Run the ffmpeg command
         subprocess.run(command, check=True)
         chunk_clip = VideoFileClip(output)
         chunk_duration = chunk_clip.duration
         start_time += chunk_duration
+        if len(segment_length)>=1:
+            end_time = start_time + segment_length
 
         #end_time += segment_length
         i += 1
@@ -559,8 +584,15 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
         if progress == total_chunks:
             progress = 0
             progress_callback(progress)
-            messagebox.showinfo("Processing Complete",
-            "Your video has been successfully processed.")
+            show_info_non_blocking("Your video has been successfully processed.")
+
+def show_info_non_blocking(message):
+    # This function will display the error in a non-blocking manner using a new thread
+    def show_message():
+        messagebox.showinfo("Information", message)
+
+    # Create a new thread to show the messagebox
+    threading.Thread(target=show_message).start()
 
 def get_keyframe_locations(input_file):
     # Run ffprobe to get keyframe timestamps
@@ -679,12 +711,14 @@ def create_page_content(my_page):
     separator = ttk.Separator(my_page, orient='horizontal')
     separator.pack(fill=tk.X, padx=10, pady=10)
 
+def on_close():
+    print("Closing application")
+    app.quit()  # Exits the main loop and closes the application
+
 def select_files():
     global selected_files
     selected_files = []
     # Create a Tkinter root window (hidden)
-    root = tk.Tk()
-    root.withdraw()  # Hide the root window
 
     # Open the file dialog to select files
     file_paths = filedialog.askopenfilenames(title="Select Files")
@@ -708,6 +742,7 @@ if __name__ == "__main__":
     # Initialize the main application window
     app = tk.Tk()
     app.title("OER Video Chunker")
+    app.protocol("WM_DELETE_WINDOW", on_close)
 
     # Center the window on the screen
     app.update_idletasks()  # Ensure correct dimensions are calculated
@@ -782,17 +817,18 @@ if __name__ == "__main__":
         command=select_files, bg="lightGrey", fg="black")
     browse_button.pack(pady=20)
 
-    videoSizeLabel = tk.Label(label_frame, text="Desired Video Segment Size (GB):",
+    updatedFileName = tk.Label(label_frame, text="Updated Video Name (if applicable): ",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    videoSizeLabel.pack(pady=5, fill=tk.X, expand=True)
-    videoSizeInstructions = tk.Label(label_frame,
-        text="Enter the maximum video segment size in GB",
+    updatedFileName.pack(pady=5, fill=tk.X, expand=True)
+    updatedFileNameInstructions = tk.Label(label_frame, text="If your file name does not"+
+        " include the start date, enter a new filename that follows this convention: "+
+        " FILENAME_YYYYMMDD (Example: Dive0982_20240916). For multiple files, separate with commas.",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    videoSizeInstructions.bind('<Configure>',
-        lambda e: videoSizeInstructions.config(wraplength=videoSizeInstructions.winfo_width()))
-    videoSizeInstructions.pack(pady=5, fill=tk.X, expand=True)
-    videoSizeEntry = tk.Entry(label_frame)
-    videoSizeEntry.pack(pady=5, fill=tk.X, expand=True)
+    updatedFileNameInstructions.bind('<Configure>',
+        lambda e: updatedFileNameInstructions.config(wraplength=updatedFileNameInstructions.winfo_width()))
+    updatedFileNameInstructions.pack(pady=5, fill=tk.X, expand=True)
+    updated_file_name_entry = tk.Entry(label_frame)
+    updated_file_name_entry.pack(pady=5, fill=tk.X, expand=True)
 
     #video_information_box = tk.Text(bottom_frame,height=6)
     #video_information_box.pack(pady=5,fill=tk.X, expand =True)
@@ -802,9 +838,9 @@ if __name__ == "__main__":
     #    "upload button below.")
 
     # Create a submit button
-    submit_button = tk.Button(bottom_frame, text="Upload Video",
-        command=video_upload, bg="lightGrey", fg="black")
-    submit_button.pack(pady=20)
+    #submit_button = tk.Button(bottom_frame, text="Upload Video",
+    #    command=video_upload, bg="lightGrey", fg="black")
+    #submit_button.pack(pady=20)
 
  ################### PAGE 2 CONTENT STARTS HERE ###################
 
@@ -821,18 +857,17 @@ if __name__ == "__main__":
         font=('Arial', 12, 'bold'))
     page2_test_label.pack(expand = True)
 
-    updatedFileName = tk.Label(page2_label_frame, text="Updated Video Name (if applicable): ",
+    videoSizeLabel = tk.Label(page2_label_frame, text="Desired Video Segment Size (GB):",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
-    updatedFileName.pack(pady=5, fill=tk.X, expand=True)
-    updatedFileNameInstructions = tk.Label(page2_label_frame, text="If your file name does not"+
-        " include the start date, enter a new filename that follows this convention: "+
-        " FILENAME_YYYYMMDD (Example: Dive0982_20240916). For multiple files, separate with commas.",
+    videoSizeLabel.pack(pady=5, fill=tk.X, expand=True)
+    videoSizeInstructions = tk.Label(page2_label_frame,
+        text="Enter the maximum video segment size in GB",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
-    updatedFileNameInstructions.bind('<Configure>',
-        lambda e: updatedFileNameInstructions.config(wraplength=updatedFileNameInstructions.winfo_width()))
-    updatedFileNameInstructions.pack(pady=5, fill=tk.X, expand=True)
-    updated_file_name_entry = tk.Entry(page2_label_frame)
-    updated_file_name_entry.pack(pady=5, fill=tk.X, expand=True)
+    videoSizeInstructions.bind('<Configure>',
+        lambda e: videoSizeInstructions.config(wraplength=videoSizeInstructions.winfo_width()))
+    videoSizeInstructions.pack(pady=5, fill=tk.X, expand=True)
+    videoSizeEntry = tk.Entry(page2_label_frame)
+    videoSizeEntry.pack(pady=5, fill=tk.X, expand=True)
 
     chunkLength = tk.Label(page2_label_frame, text="Desired length of video chunks (in seconds): ",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
