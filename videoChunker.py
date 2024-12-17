@@ -49,6 +49,7 @@ import json
 ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'ffmpeg.exe')
 ffprobe_path = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'ffprobe.exe')
 selected_files = []
+selected_directory = ""
 # Update the path to ffmpeg in the ffmpeg-python library
 ffmpeg._ffmpeg_exe = ffmpeg_path
 ffmpeg._ffprobe_exe = ffprobe_path
@@ -126,6 +127,8 @@ def video_operation():
     file_name_update_string = updated_file_name_entry.get()
     file_name_update_list = [item.strip() for item in file_name_update_string.split(',')]
     
+    output_directory_updated = output_directory_entry.get()
+
     i=0
     file_name_dict = {}
     for video_file_path in video_file_path_list:
@@ -145,7 +148,7 @@ def video_operation():
             return None
         else:
             segment_length = chunkLengthEntry.get()
-            #if len(segment_length)<1:
+            #if len(str(segment_length))<1:
             #    messagebox.showerror("Missing Information",
             #        "Enter the desired length for your video segments.")
             #    return None
@@ -341,49 +344,106 @@ def video_upload():
     show_info_non_blocking("Number of Videos Selected: " +str(len(selected_files))+
             "\nFile List: " + str(selected_files))
 
-def calculate_ideal_chunk(input_file, desired_chunk_size):
+def calculate_ideal_chunk(input_file, desired_chunk_size, progress_callback):
     chunk_dict = {}
     # Calculate the average bitrate of the video in bits per second
     #file_size = get_file_size(input_file)
     file_stats = os.stat(input_file)
+
+    progress_callback(.05)
+
     file_size = file_stats.st_size
-    clip = VideoFileClip(input_file)
-    duration = clip.duration
+
+    progress_callback(.15)
+
+    duration = get_video_duration(input_file)
+
+    progress_callback(.25)
     average_bitrate = (file_size * 8) / duration
     print(f"Average bitrate of the video: {average_bitrate / (1024 ** 2):.2f} Mbps")
     desired_size_bytes = desired_chunk_size * 1024 * 1024
     desired_size_bits = desired_size_bytes * 8
+
+    progress_callback(.30)
     # Convert bitrate from Mbps to bits per second
     # Calculate the length of the segment in seconds
     segment_length_seconds = desired_size_bits / average_bitrate
-    
+
+    progress_callback(.40)
+
     total_frame_count = get_video_frame_count(input_file)
     print("Total number of frames: ", total_frame_count)
+    progress_callback(.65)
     total_chunks = int(duration // segment_length_seconds) + (1 if duration % segment_length_seconds > 0 else 0)
     print(f"Total number of chunks: {total_chunks}")
+    progress_callback(.85)
     chunk_size_frames = int(total_frame_count // total_chunks) if total_chunks > 0 else 0
     print("Chunk size in frames: ", chunk_size_frames)
+    progress_callback(.95)
+    chunk_dict = {"chunk_frames":chunk_size_frames,"total_chunks":total_chunks, "total_frames":total_frame_count}
+    progress_callback(0)
 
-    chunk_dict = {"chunk_frames":chunk_size_frames,"total_chunks":total_chunks}
+    #show_info_non_blocking("Chunk analysis complete. Beginning video chunking process...")
 
     return chunk_dict
 
 def get_video_frame_count(input_file):
-    # Run ffprobe to get the number of frames
-    command = [
+    # First try to get the number of frames from the metadata
+    command_metadata = [
+        ffprobe_path, '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=nb_frames',
+        '-of', 'default=noprint_wrappers=1', input_file
+    ]
+    
+    result_metadata = subprocess.run(command_metadata, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result_metadata.returncode == 0:
+        # If nb_frames is available in the metadata
+        try:
+            frame_count = result_metadata.stdout.strip().split('=')[1]  # Get the value after '='
+            if str(frame_count).isnumeric() == True:
+                return int(frame_count)
+            else:
+                pass
+        except IndexError:
+            pass  # Handle case where nb_frames isn't present or parsable
+    
+    # If no frame count found or error, fallback to counting frames method
+    command_count_frames = [
         ffprobe_path, '-v', 'error', '-select_streams', 'v:0',
         '-count_frames', '-show_entries', 'stream=nb_read_frames',
         '-of', 'default=noprint_wrappers=1', input_file
     ]
     
+    result_count_frames = subprocess.run(command_count_frames, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result_count_frames.returncode == 0:
+        # Extract the number of frames from the output string
+        frame_count = result_count_frames.stdout.strip().split('=')[1]  # Get the value after '='
+        return int(frame_count)
+    else:
+        raise Exception(f"Error in ffprobe: {result_metadata.stderr or result_count_frames.stderr}")
+
+def get_video_duration(input_file):
+    # Run ffprobe to get the video duration
+    command = [
+        ffprobe_path, '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1', input_file
+    ]
+    
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode == 0:
-        # Extract the number of frames from the output string, splitting by '='
-        frame_count = result.stdout.strip().split('=')[1]  # Get the value after '='
-        return int(frame_count)
+        # Extract the duration from the output string, splitting by '='
+        duration = result.stdout.strip().split('=')[1]  # Get the value after '='
+        return float(duration)  # Convert to float (duration is in seconds)
     else:
         raise Exception(f"Error in ffprobe: {result.stderr}")
 
+def time_to_seconds(time_str):
+    # Split the string by ':'
+    hours, minutes, seconds = map(int, time_str.split(":"))
+    
+    # Convert to seconds and return
+    return hours * 3600 + minutes * 60 + seconds
 
 def split_video(filename, segment_length, file_name_dict, progress_callback):
     """
@@ -426,7 +486,7 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
     first_result = file_path_list[0]
     #my_keyframes = get_keyframe_locations(filename)
     if filename == first_result:
-        show_info_non_blocking("Video split operation started. Do not click the split video button again."+
+        show_info_non_blocking("Video splitting operation started. Do not click the split video button again."+
             " Progress bar will update shortly...")
     
     video_file_path_string = videoFileNameEntry.get()
@@ -476,30 +536,56 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
         return None
 
     target_size_bytes = desired_video_size * 1073741824
+    #print("BASENAME READ IN AS: " + basename)
 
-    chunk_information = calculate_ideal_chunk(filename, desired_video_size)
+
+    chunk_information = calculate_ideal_chunk(filename, desired_video_size,progress_callback)
+    print(str(chunk_information))
     chunk_size_frames = chunk_information.get("chunk_frames")
     total_chunks = chunk_information.get("total_chunks")
-    if len(segment_length)>=1:
+    if len(str(segment_length))>=1:
         segment_length = int(segment_length)
         print("Segment length read as: " + str(segment_length))
         end_time = segment_length
-    clip = VideoFileClip(filename)
-    duration = clip.duration
+    duration = get_video_duration(filename)
     print("Filename read as: " + str(filename))
     print("Duration read as: " + str(duration))
     start_time = 0
-    i = 1
+    i = 0
 
-    while start_time < duration:
+    frames_processed = chunk_size_frames * i
+    total_frames = chunk_information.get("total_frames")
+    remaining_frames = total_frames
+    while frames_processed < total_frames:
+    #while start_time < duration:
         print("START TIME LISTED AS: " + str(start_time))
+        print("DURATION LISTED AS: " + str(duration))
+        print("FRAME TRACKER: " +str(frames_processed)+" / " + str(total_frames))
+
+        if remaining_frames < chunk_size_frames:
+            chunk_size_frames = remaining_frames
         #print("END TIME LISTED AS: " + str(end_time))
-        start_time_converted = str(datetime.timedelta(seconds = round(start_time)))
-        start_time_converted = start_time_converted.replace(":","")
-        if len(segment_length)>=1:
+
+        custom_dive_start_time = dive_start_entry.get()
+        if len(str(custom_dive_start_time))>1:
+            converted_custom_dive_start_time = time_to_seconds(str(custom_dive_start_time))
+            real_time = start_time + converted_custom_dive_start_time
+            start_time_converted = str(datetime.timedelta(seconds = round(real_time)))
+            start_time_converted = start_time_converted.replace(":","")
+        else:
+            start_time_converted = str(datetime.timedelta(seconds = round(start_time)))
+            start_time_converted = start_time_converted.replace(":","")
+        if len(str(segment_length))>=1:
             end_time_converted = str(datetime.timedelta(seconds = end_time))
             end_time_converted = end_time_converted.replace(":","")
         #output = os.path.join(f"{basename}_part{i}."+str(extension))
+
+        updated_output_directory = output_directory_entry.get()
+        
+        if len(str(updated_output_directory)) > 0:
+            basename = os.path.join(updated_output_directory, basename)
+            print("basename updated to: " +str(basename))
+
         output = os.path.join(f"{basename}T{start_time_converted}Z."+
             str(extension))
         print("Output listed as: " + str(output))
@@ -514,6 +600,7 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
                 '-c:a', 'copy',    # Copy audio codec (no re-encoding)
                 '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
                 '-y',  # Overwrite output file if it exists
+                #'-loglevel', 'debug',  # Increase verbosity
                 #output  # Output file
             ]
 
@@ -558,7 +645,7 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
                 '-strict', 'experimental',
             ]
         # If end_time is provided, add the -to option to the command
-        if len(segment_length)>=1:
+        if len(str(segment_length))>=1:
             if start_time <1:
                 command.extend(['-to', str(segment_length)])  # Optional end time for the chunk
             else:
@@ -569,22 +656,24 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
 
         # Run the ffmpeg command
         subprocess.run(command, check=True)
-        chunk_clip = VideoFileClip(output)
-        chunk_duration = chunk_clip.duration
+        chunk_duration = get_video_duration(output)
         start_time += chunk_duration
-        if len(segment_length)>=1:
+        if len(str(segment_length))>=1:
             end_time = start_time + segment_length
 
         #end_time += segment_length
         i += 1
 
         # Update progress
-        progress = i-1
-        progress_callback(progress / total_chunks)
-        if progress == total_chunks:
-            progress = 0
-            progress_callback(progress)
+        
+        frames_processed += chunk_size_frames
+        remaining_frames -= chunk_size_frames
+        progress = frames_processed/total_frames
+        progress_callback(progress)
+        if frames_processed >= total_frames:
+            progress_callback(0)
             show_info_non_blocking("Your video has been successfully processed.")
+            break
 
 def show_info_non_blocking(message):
     # This function will display the error in a non-blocking manner using a new thread
@@ -688,24 +777,24 @@ def create_page_content(my_page):
     top_label.pack(fill=tk.X)
 
     # Top description 3
-    top_description3 = tk.Label(top_frame, text="This application will split large video"+
-        "files into chunks based on user input and generate a metadata file. Here are "+
-        "the basic directions.",
-        justify=tk.CENTER, font=('Arial', 10, 'bold'))
-    top_description3.bind('<Configure>',
-        lambda e: top_description3.config(wraplength=top_description3.winfo_width()))
-    top_description3.pack(pady=5, fill=tk.X, expand=True)
+    #top_description3 = tk.Label(top_frame, text="This application will split large video"+
+    #    "files into chunks based on user input and generate a metadata file. Here are "+
+    #    "the basic directions.",
+    #    justify=tk.CENTER, font=('Arial', 10, 'bold'))
+    #top_description3.bind('<Configure>',
+    #    lambda e: top_description3.config(wraplength=top_description3.winfo_width()))
+    #top_description3.pack(pady=5, fill=tk.X, expand=True)
 
     # Top description 4
-    top_description4 = tk.Label(top_frame, text="1. Enter the path to your video files (separated "+
-        "by commas), or use the browse function to select any number of local files. Click "+
-        "submit video to begin the process. \n2. Decide how to split the videos based on entered "+
-        "parameters. \n3. Enter any corresponding metadata for your video and generate a metadata "+
-        "spreadsheet.",
-        justify=tk.LEFT, font=('Arial', 10))
-    top_description4.bind('<Configure>',
-        lambda e: top_description4.config(wraplength=top_description4.winfo_width()))
-    top_description4.pack(pady=5, fill=tk.X, expand=True)
+    #top_description4 = tk.Label(top_frame, text="1. Enter the path to your video files (separated "+
+        #"by commas), or use the browse function to select any number of local files. Click "+
+        #"submit video to begin the process. \n2. Decide how to split the videos based on entered "+
+        #"parameters. \n3. Enter any corresponding metadata for your video and generate a metadata "+
+        #"spreadsheet.",
+        #justify=tk.LEFT, font=('Arial', 10))
+    #top_description4.bind('<Configure>',
+    #    lambda e: top_description4.config(wraplength=top_description4.winfo_width()))
+    #top_description4.pack(pady=5, fill=tk.X, expand=True)
 
     # Separator (Bar)
     separator = ttk.Separator(my_page, orient='horizontal')
@@ -736,6 +825,21 @@ def select_files():
         videoFileNameEntry.insert(0, file_string.strip(','))
     else:
         print("No files selected.")
+
+def select_directory():
+    global selected_directory
+    selected_directory = ""
+    # Open the file dialog to select a directory
+    directory_path = filedialog.askdirectory(title="Select Output Directory")
+
+    # Check if a directory was selected
+    if directory_path:
+        print(f"Selected directory: {directory_path}")
+        selected_directory = directory_path  # Store the directory path
+        output_directory_entry.delete(0, tk.END)  # Clear any existing text
+        output_directory_entry.insert(0, selected_directory.strip())
+    else:
+        print("No directory selected")
 
 if __name__ == "__main__":
 
@@ -768,11 +872,11 @@ if __name__ == "__main__":
 
     # First page (tab)
     page1 = ttk.Frame(notebook)
-    notebook.add(page1, text="Upload Video")
+    notebook.add(page1, text="Select Files")
 
     # Second page (tab)
     page2 = ttk.Frame(notebook)
-    notebook.add(page2, text="Split Video")
+    notebook.add(page2, text="Split Files")
 
     # Third page (tab)
     page3 = ttk.Frame(notebook)
@@ -795,16 +899,16 @@ if __name__ == "__main__":
     #label_frame.place(x = 60, y = 100)
 
     # Create the label and pack it to fill the whole frame (default anchor is Centre)
-    test_label = tk.Label(label_frame, text = 'Enter Video Information', font=('Arial', 12, 'bold'))
+    test_label = tk.Label(label_frame, text = 'Enter Video Input and Output', font=('Arial', 12, 'bold'))
     test_label.pack(expand = True)
 
-    videoFileName = tk.Label(label_frame, text="Video File Path:",
+    videoFileName = tk.Label(label_frame, text="Select Input File(s):",
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
     videoFileName.pack(pady=5, fill=tk.X, expand=True)
     videoFileNameInstructions = tk.Label(label_frame,
-        text="If this video is in your working directory, just enter the filename. Be sure to "+
-        "include the extension (.mov or .mp4). Get the full file path by finding the file in "+
-        "file explorer, right clicking it and selecting 'properties.'",
+        text="Use the browse button to select files or enter the filepath manually. Be sure to "+
+        "include the extension (.mov or .mp4). Select multiple files with browse function with "+
+        "the ctrl key.",
         font=('Arial', 8), justify=tk.LEFT, anchor="w")
     videoFileNameInstructions.bind('<Configure>',
         lambda e: videoFileNameInstructions.config(wraplength=videoFileNameInstructions.winfo_width()))
@@ -829,6 +933,25 @@ if __name__ == "__main__":
     updatedFileNameInstructions.pack(pady=5, fill=tk.X, expand=True)
     updated_file_name_entry = tk.Entry(label_frame)
     updated_file_name_entry.pack(pady=5, fill=tk.X, expand=True)
+
+    output_directory = tk.Label(label_frame, text="Output Directory Path (if applicable): ",
+        font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
+    output_directory.pack(pady=5, fill=tk.X, expand=True)
+
+    output_directory_instructions = tk.Label(label_frame, text="Use the browse directory"+
+        " button to select an output directory for your video chunks. If none is selected"+
+        " your current working directory will be used.",
+        font=('Arial', 8), justify=tk.LEFT, anchor="w")
+    output_directory_instructions.bind('<Configure>',
+        lambda e: output_directory_instructions.config(wraplength=output_directory_instructions.winfo_width()))
+    output_directory_instructions.pack(pady=5, fill=tk.X, expand=True)
+    output_directory_entry = tk.Entry(label_frame)
+    output_directory_entry.pack(pady=5, fill=tk.X, expand=True)
+
+        # Create a browse button
+    output_directory_button = tk.Button(label_frame, text="Browse Directories",
+        command=select_directory, bg="lightGrey", fg="black")
+    output_directory_button.pack(pady=20)
 
     #video_information_box = tk.Text(bottom_frame,height=6)
     #video_information_box.pack(pady=5,fill=tk.X, expand =True)
@@ -881,6 +1004,21 @@ if __name__ == "__main__":
     chunkLengthInstructions.pack(pady=5, fill=tk.X, expand=True)
     chunkLengthEntry = tk.Entry(page2_label_frame)
     chunkLengthEntry.pack(pady=5, fill=tk.X, expand=True)
+
+
+
+    dive_start = tk.Label(page2_label_frame, text="Enter custom dive start time (HH:MM:SS): ",
+        font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
+    dive_start.pack(pady=5, fill=tk.X, expand=True)
+    dive_start_instructions = tk.Label(page2_label_frame,
+        text="Enter the start time of the video here. Ensure that you adhere to this format: HH:MM:SS",
+        font=('Arial', 8), justify=tk.LEFT, anchor="w")
+    dive_start_instructions.bind('<Configure>',
+        lambda e: dive_start_instructions.config(wraplength=dive_start_instructions.winfo_width()))
+    dive_start_instructions.pack(pady=5, fill=tk.X, expand=True)
+    dive_start_entry = tk.Entry(page2_label_frame)
+    dive_start_entry.pack(pady=5, fill=tk.X, expand=True)
+
 
     dropdownLabel = tk.Label(page2_label_frame,
         text="If you want to convert your output files, select a new file type:",
