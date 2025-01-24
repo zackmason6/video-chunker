@@ -611,7 +611,6 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
     #target_size_bytes = desired_video_size * 1073741824
     #print("BASENAME READ IN AS: " + basename)
 
-
     chunk_information = calculate_ideal_chunk(filename, desired_video_size,progress_callback)
     print("SENT This information to calculate chunk:")
     print("FILENAME: "+str(filename))
@@ -721,22 +720,23 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             acodec = 'aac'
 
             if len(str(segment_length))>=1:
+
                 command = [
                     ffmpeg_path,
-                    '-i', filename,  # Input file
                     '-ss', str(start_time),  # Start time for the chunk in seconds
-                    '-to', str(min(end_time, duration)),
+                    '-i', filename,  # Input file
+                    '-t', str(min(end_time, duration) - start_time),
+                    '-force_key_frames', 'expr:gte(t,n_forced*5)',
                     '-c:v', vcodec,
                     '-c:a', acodec,
                     '-y',
                     '-strict', 'experimental',
                 ]
-
             else:
                 command = [
                     ffmpeg_path,
-                    '-ss', str(start_time),
                     '-i', filename,
+                    '-ss', str(start_time),
                     '-c:v', vcodec,
                     '-c:a', acodec,
                     '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
@@ -751,9 +751,10 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
 
                 command = [
                     ffmpeg_path,
-                    '-i', filename,  # Input file
                     '-ss', str(start_time),  # Start time for the chunk in seconds
-                    '-to', str(min(end_time, duration)),
+                    '-i', filename,  # Input file
+                    '-t', str(min(end_time, duration) - start_time),
+                    '-force_key_frames', 'expr:gte(t,n_forced*5)',
                     '-c:v', vcodec,
                     '-c:a', acodec,
                     '-y',
@@ -762,8 +763,8 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             else:
                 command = [
                     ffmpeg_path,
-                    '-ss', str(start_time),
                     '-i', filename,
+                    '-ss', str(start_time),
                     '-c:v', vcodec,
                     '-c:a', acodec,
                     '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
@@ -775,9 +776,10 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             if len(str(segment_length))>=1:
                 command = [
                     ffmpeg_path,
-                    '-i', filename,
                     '-ss', str(start_time),
-                    '-to', str(min(end_time, duration)),
+                    '-i', filename,
+                    '-t', str(min(end_time, duration) - start_time),
+                    '-force_key_frames', 'expr:gte(t,n_forced*5)',
                     '-c:v', vcodec,
                     '-crf', '0',
                     '-preset','veryslow',
