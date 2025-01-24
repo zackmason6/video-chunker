@@ -1,18 +1,20 @@
 """
 videoChunker.py
 
-Written by Zack Mason on 9/4/2024
+Written by Zack Mason on 12/17/2024
+
+This documentation is a mess. Will need some cleanup.
 
 This application allows a user to perform a number of operations on a local
 video file.
 
 Currently it can be run as a standalone application via conversion to .exe
 or it can be run as a python script. If run as the latter, you will need
-to have FFMPEG installed in the working directory. This script uses a 
-hardcoded relative path to ffmpeg for ease of use in executable form.
+to have FFMPEG (and ffprobe) installed in the working directory. This script uses a 
+hardcoded relative path to both executables for ease of use in executable form.
 Check the script for this path if intending to use as a python application.
 Actually, here it is: ffmpeg_path = os.path.join(os.path.dirname(__file__),
-   'ffmpeg', 'ffmpeg.exe')
+   'ffmpeg', 'ffmpeg.exe'). For ffprobe, just replace ffmpeg with ffmprobe.
 
 1. Chunking
 - The user can upload a video file to chunk it into smaller files based on
@@ -31,6 +33,7 @@ Actually, here it is: ffmpeg_path = os.path.join(os.path.dirname(__file__),
 """
 
 import os
+import sys
 import csv
 import subprocess
 import tkinter as tk
@@ -50,6 +53,9 @@ ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'ffmpeg.exe')
 ffprobe_path = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'ffprobe.exe')
 selected_files = []
 selected_directory = ""
+spinner_index = 0
+spinner_active = True
+update_id = None
 # Update the path to ffmpeg in the ffmpeg-python library
 ffmpeg._ffmpeg_exe = ffmpeg_path
 ffmpeg._ffprobe_exe = ffprobe_path
@@ -323,7 +329,7 @@ def video_upload():
         if len(desired_video_size)<1:
             desired_video_size = 5
         else:
-            desired_video_size = int(desired_video_size)
+            desired_video_size = float(desired_video_size)
     except:
         messagebox.showinfo("Invalid Input",
             "Please enter an integer value for desired video size(GB). "+
@@ -345,6 +351,7 @@ def video_upload():
             "\nFile List: " + str(selected_files))
 
 def calculate_ideal_chunk(input_file, desired_chunk_size, progress_callback):
+    print(f"Inside calculate_ideal_chunk, desired_video_size: {desired_chunk_size}")
     chunk_dict = {}
     # Calculate the average bitrate of the video in bits per second
     #file_size = get_file_size(input_file)
@@ -352,36 +359,63 @@ def calculate_ideal_chunk(input_file, desired_chunk_size, progress_callback):
 
     progress_callback(.05)
 
-    file_size = file_stats.st_size
+    if float(desired_chunk_size) <= 0:
+        raise ValueError("Desired chunk size must be a positive number.")
 
-    progress_callback(.15)
+    file_size = float(file_stats.st_size)
+    if file_size <= 0:
+        raise ValueError("Invalid file size.")
 
-    duration = get_video_duration(input_file)
+    #progress_callback(.15)
 
-    progress_callback(.25)
-    average_bitrate = (file_size * 8) / duration
-    print(f"Average bitrate of the video: {average_bitrate / (1024 ** 2):.2f} Mbps")
-    desired_size_bytes = desired_chunk_size * 1024 * 1024
-    desired_size_bits = desired_size_bytes * 8
+    try:
+        duration = get_video_duration(input_file)
+        if duration <= 0:
+            raise ValueError("Invalid video duration. Cannot proceed.")
 
-    progress_callback(.30)
-    # Convert bitrate from Mbps to bits per second
-    # Calculate the length of the segment in seconds
-    segment_length_seconds = desired_size_bits / average_bitrate
+        progress_callback(.25)
+        average_bitrate = (file_size * 8) / duration
+        print(f"Average bitrate of the video: {average_bitrate / (1024 ** 2):.2f} Mbps")
 
-    progress_callback(.40)
+        print("DESIRED CHUNK READ AS " + str(desired_chunk_size))
+        if len(str(desired_chunk_size))<1:
+            desired_chunk_size = 200
+        desired_size_bytes = float(desired_chunk_size * 1024 * 1024 * 1024)
+        #desired_size_bytes = float(desired_chunk_size * 1073741824)
+        desired_size_bits = float(desired_size_bytes * 8)
+        print(f"Desired size in bytes: {desired_size_bytes}")
+        print(f"Desired size in bits: {desired_size_bits}")
+        
+        progress_callback(.30)
 
-    total_frame_count = get_video_frame_count(input_file)
-    print("Total number of frames: ", total_frame_count)
-    progress_callback(.65)
-    total_chunks = int(duration // segment_length_seconds) + (1 if duration % segment_length_seconds > 0 else 0)
-    print(f"Total number of chunks: {total_chunks}")
-    progress_callback(.85)
-    chunk_size_frames = int(total_frame_count // total_chunks) if total_chunks > 0 else 0
-    print("Chunk size in frames: ", chunk_size_frames)
-    progress_callback(.95)
-    chunk_dict = {"chunk_frames":chunk_size_frames,"total_chunks":total_chunks, "total_frames":total_frame_count}
-    progress_callback(0)
+        segment_length_seconds = float(desired_size_bits) / float(average_bitrate)
+        progress_callback(.40)
+
+        total_frame_count = get_video_frame_count(input_file)
+        if total_frame_count <= 0:
+            raise ValueError("Invalid total frame count.")
+        print("Total number of frames: ", total_frame_count)
+
+        progress_callback(.65)
+
+        total_chunks = int(duration // segment_length_seconds) + (1 if duration % segment_length_seconds > 0 else 0)
+        if total_chunks <= 0:
+            raise ValueError("Total chunks cannot be zero or negative.")
+        print(f"Total number of chunks: {total_chunks}")
+
+        progress_callback(.85)
+
+        chunk_size_frames = int(total_frame_count // total_chunks) if total_chunks > 0 else 0
+        print("Chunk size in frames: ", chunk_size_frames)
+
+        progress_callback(.95)
+
+        chunk_dict = {"chunk_frames": chunk_size_frames, "total_chunks": total_chunks, "total_frames": total_frame_count}
+        progress_callback(0)
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        progress_callback(0)
 
     #show_info_non_blocking("Chunk analysis complete. Beginning video chunking process...")
 
@@ -445,6 +479,38 @@ def time_to_seconds(time_str):
     # Convert to seconds and return
     return hours * 3600 + minutes * 60 + seconds
 
+# Function to start the spinner (can be called with True to start)
+def start_spinner():
+    global spinner_active
+    if not spinner_active:  # Only start if the spinner isn't already active
+        spinner_active = True
+        update_spinner()  # Start the spinner if it's not already active
+
+# Function to stop the spinner (can be called with False to stop)
+def stop_spinner():
+    global spinner_active, update_id
+    spinner_active = False  # Stop the spinner from cycling
+    if update_id is not None:
+        app.after_cancel(update_id)  # Cancel the scheduled update if any
+    spinner_label.config(text="")  # Reset text to default "Waiting"
+
+def update_spinner():
+    global spinner_index, spinner_active, update_id
+    
+    # Spinner sequence
+    spinner_sequence = ["Working", "Working.", "Working..", "Working...", "Working...."]
+    
+    # Update the spinner text
+    spinner_label.config(text=spinner_sequence[spinner_index])
+
+    # Update the spinner index for the next cycle
+    spinner_index = (spinner_index + 1) % len(spinner_sequence)
+
+    # If spinner is active, continue cycling every second
+    if spinner_active:
+        update_id = app.after(1000, update_spinner)  # Schedule the next update
+
+
 def split_video(filename, segment_length, file_name_dict, progress_callback):
     """
     Splits a video file into segments of a specified length and optionally converts them to a
@@ -482,12 +548,10 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
       to run correctly. This uses a relative path and should just work out of the box as-is.
     """
     
-    file_path_list = list(file_name_dict.keys())
-    first_result = file_path_list[0]
-    #my_keyframes = get_keyframe_locations(filename)
-    if filename == first_result:
-        show_info_non_blocking("Video splitting operation started. Do not click the split video button again."+
-            " Progress bar will update shortly...")
+    update_spinner()
+
+    #file_path_list = list(file_name_dict.keys())
+    #first_result = file_path_list[0]
     
     video_file_path_string = videoFileNameEntry.get()
     video_file_path_list = [item.strip() for item in video_file_path_string.split(',')]
@@ -498,24 +562,33 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             messagebox.showerror("File not found",
                 "This file ("+str(video_file_path)+") does not exist. Re-enter a file path")
             return None
-
+    
+    #try:
+    ##    desired_video_size = videoSizeEntry.get()
+    #    print("DESIRED FILE SIZE: " + str(desired_video_size))
+    #    if len(desired_video_size)<1:
+            #messagebox.showerror("Invalid Input",
+            #    "Please enter an integer value for estimated video size(GB).")
+            #return None
+        #else:
+        #    desired_video_size = int(desired_video_size)
+    #except:
+        #messagebox.showerror("Invalid Input",
+        #    "Please enter an integer value for estimated video size(GB).")
+        #return None
     try:
-        desired_video_size = videoSizeEntry.get()
-        if len(desired_video_size)<1:
-            messagebox.showerror("Invalid Input",
-                "Please enter an integer value for estimated video size(GB).")
-            return None
-        else:
-            desired_video_size = int(desired_video_size)
+        desired_video_size = float(videoSizeEntry.get())
+        print("Raw desired video size: " + str(desired_video_size))
     except:
-        messagebox.showerror("Invalid Input",
-            "Please enter an integer value for estimated video size(GB).")
-        return None
+        desired_video_size = float(.02)
 
     updated_file_name = file_name_dict.get(filename)
+    #if updated_file_name.startswith("\\"):
+    updated_file_name = updated_file_name.replace("\\","")
+    updated_file_name = updated_file_name.strip(r"\\")
     dropdown_option = option_var.get()
     basename = os.path.basename(filename).split('.')[0]
-    if dropdown_option == "No Conversion":
+    if dropdown_option == "No Conversion" or dropdown_option == "Lossless Encoding":
         extension = os.path.basename(filename).split('.')[1]
     else:
         extension = "." + dropdown_option.lower()
@@ -535,14 +608,18 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             "Your file name should end with a date in this format: FILENAME_YYYYMMDD. Please enter a new file name in the appropriate section.")
         return None
 
-    target_size_bytes = desired_video_size * 1073741824
+    #target_size_bytes = desired_video_size * 1073741824
     #print("BASENAME READ IN AS: " + basename)
 
 
     chunk_information = calculate_ideal_chunk(filename, desired_video_size,progress_callback)
-    print(str(chunk_information))
+    print("SENT This information to calculate chunk:")
+    print("FILENAME: "+str(filename))
+    print("DESIRED VIDEO SIZE: " +str(desired_video_size))
+    #print(str(chunk_information))
+
     chunk_size_frames = chunk_information.get("chunk_frames")
-    total_chunks = chunk_information.get("total_chunks")
+    #total_chunks = chunk_information.get("total_chunks")
     if len(str(segment_length))>=1:
         segment_length = int(segment_length)
         print("Segment length read as: " + str(segment_length))
@@ -556,15 +633,33 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
     frames_processed = chunk_size_frames * i
     total_frames = chunk_information.get("total_frames")
     remaining_frames = total_frames
-    while frames_processed < total_frames:
+    remaining_time = duration
+
+    keep_going = True
+
+    #if filename == first_result:
+    #    show_info_non_blocking("Video splitting operation started. Do not click the split video button again."+
+    #        " Progress bar will update shortly...")
+
+    while keep_going == True:
+    #while frames_processed < total_frames:
     #while start_time < duration:
         print("START TIME LISTED AS: " + str(start_time))
-        print("DURATION LISTED AS: " + str(duration))
+        if len(str(segment_length))>1:
+            print("END TIME LISTED AS: " + str(end_time))
+            print("DURATION LISTED AS: " + str(duration))
         print("FRAME TRACKER: " +str(frames_processed)+" / " + str(total_frames))
 
         if remaining_frames < chunk_size_frames:
             chunk_size_frames = remaining_frames
         #print("END TIME LISTED AS: " + str(end_time))
+
+
+        """
+        Timestamp creation cutting off 0s
+        - Process HHMMSS separately, ensure 2 digits per 
+        """
+
 
         custom_dive_start_time = dive_start_entry.get()
         if len(str(custom_dive_start_time))>1:
@@ -581,6 +676,13 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
         #output = os.path.join(f"{basename}_part{i}."+str(extension))
 
         updated_output_directory = output_directory_entry.get()
+        if len(str(updated_output_directory))>=1:
+            directory_exists = os.path.isdir(str(updated_output_directory))
+            if not directory_exists:
+                try:
+                    os.mkdir(updated_output_directory)
+                except:
+                    updated_output_directory = ""
         
         if len(str(updated_output_directory)) > 0:
             basename = os.path.join(updated_output_directory, basename)
@@ -591,65 +693,117 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
         print("Output listed as: " + str(output))
 
         if dropdown_option == "No Conversion":
-
-            command = [
-                ffmpeg_path,
-                '-i', filename,  # Input file
-                '-ss', str(start_time),  # Start time for the chunk in seconds
-                '-c:v', 'copy',    # Copy video codec (no re-encoding)
-                '-c:a', 'copy',    # Copy audio codec (no re-encoding)
-                '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
-                '-y',  # Overwrite output file if it exists
-                #'-loglevel', 'debug',  # Increase verbosity
-                #output  # Output file
-            ]
-
-            #command = [
-            #    ffmpeg_path,
-            #    '-i', filename,
-            #    '-ss', str(start_time),
-            #    '-to', str(min(end_time, duration)),
-            #    '-c', 'copy',
-            #    output
-            #]
+            
+            if len(str(segment_length))>=1:
+                command = [
+                    ffmpeg_path,
+                    '-i', filename,  # Input file
+                    '-ss', str(start_time),  # Start time for the chunk in seconds
+                    '-to', str(min(end_time, duration)),
+                    '-c:v', 'copy',    # Copy video codec (no re-encoding)
+                    '-c:a', 'copy',    # Copy audio codec (no re-encoding)
+                    '-y',  # Overwrite output file if it exists
+                ]
+            else:
+                command = [
+                    ffmpeg_path,
+                    '-i', filename,  # Input file
+                    '-ss', str(start_time),  # Start time for the chunk in seconds
+                    '-c:v', 'copy',    # Copy video codec (no re-encoding)
+                    '-c:a', 'copy',    # Copy audio codec (no re-encoding)
+                    '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
+                    '-y',  # Overwrite output file if it exists
+                ]
 
         elif dropdown_option == "MP4":
             output = output.replace('..','.')
             vcodec ='libx264'
             acodec = 'aac'
-            command = [
-                ffmpeg_path,
-                '-ss', str(start_time),
-                '-i', filename,
-                #'-to', str(min(end_time, duration)),
-                #"-fs", str(target_size_bytes),
-                '-c:v', vcodec,
-                '-c:a', acodec,
-                '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
-                '-strict', 'experimental',
-            ]
+
+            if len(str(segment_length))>=1:
+                command = [
+                    ffmpeg_path,
+                    '-i', filename,  # Input file
+                    '-ss', str(start_time),  # Start time for the chunk in seconds
+                    '-to', str(min(end_time, duration)),
+                    '-c:v', vcodec,
+                    '-c:a', acodec,
+                    '-y',
+                    '-strict', 'experimental',
+                ]
+
+            else:
+                command = [
+                    ffmpeg_path,
+                    '-ss', str(start_time),
+                    '-i', filename,
+                    '-c:v', vcodec,
+                    '-c:a', acodec,
+                    '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
+                    '-strict', 'experimental',
+                ]
 
         elif dropdown_option == "MOV":
             output = output.replace('..','.')
             vcodec ='libx264'
             acodec = 'aac'
-            command = [
-                ffmpeg_path,
-                '-ss', str(start_time),
-                '-i', filename,
-                #'-to', str(min(end_time, duration)),
-                #"-fs", str(target_size_bytes),
-                '-c:v', vcodec,
-                '-c:a', acodec,
-                '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
-                '-strict', 'experimental',
-            ]
-        # If end_time is provided, add the -to option to the command
-        if len(str(segment_length))>=1:
-            if start_time <1:
-                command.extend(['-to', str(segment_length)])  # Optional end time for the chunk
+            if len(str(segment_length))>=1:
+
+                command = [
+                    ffmpeg_path,
+                    '-i', filename,  # Input file
+                    '-ss', str(start_time),  # Start time for the chunk in seconds
+                    '-to', str(min(end_time, duration)),
+                    '-c:v', vcodec,
+                    '-c:a', acodec,
+                    '-y',
+                    '-strict', 'experimental',
+                ]
             else:
-                command.extend(['-to', str(end_time)])  # Optional end time for the chunk
+                command = [
+                    ffmpeg_path,
+                    '-ss', str(start_time),
+                    '-i', filename,
+                    '-c:v', vcodec,
+                    '-c:a', acodec,
+                    '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
+                    '-strict', 'experimental',
+                ]
+        elif dropdown_option == "Lossless Encoding":
+            acodec = 'pcm_s16le'
+            vcodec = 'libx264'
+            if len(str(segment_length))>=1:
+                command = [
+                    ffmpeg_path,
+                    '-i', filename,
+                    '-ss', str(start_time),
+                    '-to', str(min(end_time, duration)),
+                    '-c:v', vcodec,
+                    '-crf', '0',
+                    '-preset','veryslow',
+                    '-c:a', acodec,
+                    '-y',  # Overwrite output file if it exists
+                ]
+            else:
+                command = [
+                    ffmpeg_path,
+                    '-i', filename,
+                    '-ss', str(start_time),
+                    '-c:v', vcodec,
+                    '-crf', '0',
+                    '-preset','veryslow',
+                    '-c:a', acodec,
+                    '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
+                    '-y',  # Overwrite output file if it exists
+                ]
+
+
+        # If end_time is provided, add the -to option to the command
+        #if len(str(segment_length))>=1:
+        #    if start_time <1:
+        #        command.extend(['-to', str(segment_length)])  # Optional end time for the chunk
+        #    else:
+        #        command.extend(['-to', str(end_time)])  # Optional end time for the chunk
 
         # Add the output file at the end
         command.append(output)
@@ -658,8 +812,11 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
         subprocess.run(command, check=True)
         chunk_duration = get_video_duration(output)
         start_time += chunk_duration
+        remaining_time -= chunk_duration
         if len(str(segment_length))>=1:
-            end_time = start_time + segment_length
+            end_time = start_time + chunk_duration
+            if end_time >= duration:
+                end_time = start_time + remaining_time
 
         #end_time += segment_length
         i += 1
@@ -668,12 +825,31 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
         
         frames_processed += chunk_size_frames
         remaining_frames -= chunk_size_frames
-        progress = frames_processed/total_frames
-        progress_callback(progress)
-        if frames_processed >= total_frames:
-            progress_callback(0)
-            show_info_non_blocking("Your video has been successfully processed.")
-            break
+
+
+        if len(str(segment_length))<1:
+            progress = frames_processed/total_frames
+            progress_callback(progress)
+            if frames_processed >= total_frames:
+                keep_going = False
+                progress_callback(0)
+                show_info_non_blocking("Your video has been successfully processed.")
+                print("Your video has been processed.")
+                stop_spinner()
+                #spinner_label.config(text="")
+                break
+        else:
+            progress = start_time/duration
+            progress_callback(progress)
+            if start_time >= duration:
+                keep_going = False
+                progress_callback(0)
+                show_info_non_blocking("Your video has been successfully processed.")
+                print("Your video has been processed.")
+                stop_spinner()
+                #spinner_label.config(text="")
+                break
+    spinner_label.config(text="")
 
 def show_info_non_blocking(message):
     # This function will display the error in a non-blocking manner using a new thread
@@ -1025,7 +1201,7 @@ if __name__ == "__main__":
         font=('Arial', 10, 'bold'), justify=tk.LEFT, anchor="w")
     dropdownLabel.pack(pady=5, fill=tk.X, expand=True)
     # Set options for video conversion dropdown list
-    options = ["No Conversion", "MP4", "MOV"]
+    options = ["No Conversion", "Lossless Encoding", "MP4", "MOV"]
 
     # Set variable to contain user choice from conversion dropdown
     option_var = tk.StringVar(page2)
@@ -1041,6 +1217,10 @@ if __name__ == "__main__":
     progress_bar = ttk.Progressbar(page2, orient="horizontal", length=300,
         mode="determinate")
     progress_bar.pack(padx=10, pady=10)
+
+            # Create a label for the spinner (activity indicator)
+    spinner_label = ttk.Label(page2, text="")
+    spinner_label.pack(padx=10, pady=10)
 
     split_video_button = tk.Button(page2, text="Split Video",
         command=video_operation, bg="lightGrey", fg="black")
