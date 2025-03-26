@@ -350,6 +350,19 @@ def video_upload():
     show_info_non_blocking("Number of Videos Selected: " +str(len(selected_files))+
             "\nFile List: " + str(selected_files))
 
+def get_keyframe_interval(number_of_frames,keyframe_interval):
+    chunk_frames_acceptable = is_divisible(number_of_frames, keyframe_interval)
+    if chunk_frames_acceptable == False:
+        print('Adjusting keyframe interval')
+        for i in range(2, number_of_frames):
+            new_chunk_size_acceptable = is_divisible(number_of_frames,i)
+            if new_chunk_size_acceptable == True:
+                keyframe_interval = i
+                print("GOT A NEW KEYFRAME INTERVAL: " + str(keyframe_interval))
+
+    keyframe_expr="expr:gte(t,"+str(keyframe_interval)+")"
+    return keyframe_expr
+
 def calculate_ideal_chunk(input_file, desired_chunk_size, progress_callback):
     print(f"Inside calculate_ideal_chunk, desired_video_size: {desired_chunk_size}")
     chunk_dict = {}
@@ -510,6 +523,20 @@ def update_spinner():
     if spinner_active:
         update_id = app.after(1000, update_spinner)  # Schedule the next update
 
+def is_divisible(num1, num2):
+  """
+  Checks if num1 is evenly divisible by num2.
+
+  Args:
+    num1: The dividend (the number being divided).
+    num2: The divisor (the number dividing).
+
+  Returns:
+    True if num1 is evenly divisible by num2, False otherwise.
+  """
+  if num2 == 0:
+    return False  # Avoid ZeroDivisionError
+  return num1 % num2 == 0
 
 def split_video(filename, segment_length, file_name_dict, progress_callback):
     """
@@ -549,6 +576,7 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
     """
     
     update_spinner()
+    keyframe_interval = 5
 
     #file_path_list = list(file_name_dict.keys())
     #first_result = file_path_list[0]
@@ -618,6 +646,11 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
     #print(str(chunk_information))
 
     chunk_size_frames = chunk_information.get("chunk_frames")
+
+    keyframe_expr = get_keyframe_interval(chunk_size_frames,keyframe_interval)
+                    
+    print("THIS IS YOUR KEYFRAME EXPRESSION: " + str(keyframe_expr))
+
     #total_chunks = chunk_information.get("total_chunks")
     if len(str(segment_length))>=1:
         segment_length = int(segment_length)
@@ -651,6 +684,7 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
 
         if remaining_frames < chunk_size_frames:
             chunk_size_frames = remaining_frames
+            keyframe_expr = get_keyframe_interval(chunk_size_frames,keyframe_interval)
         #print("END TIME LISTED AS: " + str(end_time))
 
 
@@ -665,14 +699,37 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             converted_custom_dive_start_time = time_to_seconds(str(custom_dive_start_time))
             real_time = start_time + converted_custom_dive_start_time
             start_time_converted = str(datetime.timedelta(seconds = round(real_time)))
-            start_time_converted = start_time_converted.replace(":","")
+            #start_time_converted = start_time_converted.replace(":","")
         else:
             start_time_converted = str(datetime.timedelta(seconds = round(start_time)))
-            start_time_converted = start_time_converted.replace(":","")
+            #start_time_converted = start_time_converted.replace(":","")
         if len(str(segment_length))>=1:
             end_time_converted = str(datetime.timedelta(seconds = end_time))
+            end_time_split = start_time_converted.split(":")
+            new_end_time = ""
+            for measurement in end_time_split:
+                #print(measurement)
+                if len(str(measurement))<2:
+                    measurement = '0' + measurement
+                new_end_time = new_end_time + measurement
+            print("NEW END TIME: " +new_end_time)
             end_time_converted = end_time_converted.replace(":","")
         #output = os.path.join(f"{basename}_part{i}."+str(extension))
+        start_time_split = start_time_converted.split(":")
+        new_start_time = ""
+        for measurement in start_time_split:
+            print(measurement+': '+str(len(measurement)))
+            measurement = measurement.strip()
+            if len(str(measurement))<2:
+                measurement = '0' + str(measurement)
+                print("NEW MEASUREMENT: "+str(measurement))
+            if len(new_start_time)<1:
+                new_start_time = str(measurement)
+            else:
+                new_start_time = new_start_time + measurement
+        print("NEW START TIME: " +new_start_time)
+        start_time_converted = start_time_converted.replace(":","")
+
 
         updated_output_directory = output_directory_entry.get()
         if len(str(updated_output_directory))>=1:
@@ -720,13 +777,12 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             acodec = 'aac'
 
             if len(str(segment_length))>=1:
-
                 command = [
                     ffmpeg_path,
                     '-ss', str(start_time),  # Start time for the chunk in seconds
                     '-i', filename,  # Input file
                     '-t', str(min(end_time, duration) - start_time),
-                    '-force_key_frames', 'expr:gte(t,n_forced*5)',
+                    '-force_key_frames', keyframe_expr,
                     '-c:v', vcodec,
                     '-c:a', acodec,
                     '-y',
@@ -735,12 +791,14 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             else:
                 command = [
                     ffmpeg_path,
-                    '-i', filename,
-                    '-ss', str(start_time),
-                    '-c:v', vcodec,
-                    '-c:a', acodec,
+                    '-ss', str(start_time),  # Fast seek to start_time
+                    '-i', filename,  # Input file
+                    '-c:v', vcodec,  # Specify the video codec
+                    '-c:a', acodec,  # Specify the audio codec
                     '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
-                    '-strict', 'experimental',
+                    '-force_key_frames', keyframe_expr,
+                    '-strict', 'experimental',  # Allow experimental codecs
+                    '-y',  # Overwrite output file if it exists
                 ]
 
         elif dropdown_option == "MOV":
@@ -754,7 +812,7 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
                     '-ss', str(start_time),  # Start time for the chunk in seconds
                     '-i', filename,  # Input file
                     '-t', str(min(end_time, duration) - start_time),
-                    '-force_key_frames', 'expr:gte(t,n_forced*5)',
+                    '-force_key_frames', keyframe_expr,
                     '-c:v', vcodec,
                     '-c:a', acodec,
                     '-y',
@@ -763,12 +821,14 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             else:
                 command = [
                     ffmpeg_path,
-                    '-i', filename,
-                    '-ss', str(start_time),
-                    '-c:v', vcodec,
-                    '-c:a', acodec,
+                    '-ss', str(start_time),  # Fast seek to start_time
+                    '-i', filename,  # Input file
+                    '-c:v', vcodec,  # Specify the video codec
+                    '-c:a', acodec,  # Specify the audio codec
                     '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
-                    '-strict', 'experimental',
+                    '-force_key_frames', keyframe_expr,
+                    '-strict', 'experimental',  # Allow experimental codecs
+                    '-y',  # Overwrite output file if it exists
                 ]
         elif dropdown_option == "Lossless Encoding":
             acodec = 'pcm_s16le'
@@ -779,7 +839,7 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
                     '-ss', str(start_time),
                     '-i', filename,
                     '-t', str(min(end_time, duration) - start_time),
-                    '-force_key_frames', 'expr:gte(t,n_forced*5)',
+                    '-force_key_frames', keyframe_expr,
                     '-c:v', vcodec,
                     '-crf', '0',
                     '-preset','veryslow',
@@ -789,13 +849,14 @@ def split_video(filename, segment_length, file_name_dict, progress_callback):
             else:
                 command = [
                     ffmpeg_path,
-                    '-i', filename,
                     '-ss', str(start_time),
+                    '-i', filename,
                     '-c:v', vcodec,
                     '-crf', '0',
                     '-preset','veryslow',
                     '-c:a', acodec,
                     '-frames:v', str(chunk_size_frames),  # Number of frames for the chunk
+                    '-force_key_frames', keyframe_expr,
                     '-y',  # Overwrite output file if it exists
                 ]
 
